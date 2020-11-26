@@ -136,6 +136,10 @@ async fn real_main() -> ApiResult<()> {
 
     let cluster_clone = cluster.clone();
     tokio::spawn(async move {
+        let shard_strings: Vec<String> = (0..cluster_clone.shards().len())
+            .map(|x| x.to_string())
+            .collect();
+
         let mut events = cluster_clone.some_events(
             EventTypeFlags::GATEWAY_HELLO
                 | EventTypeFlags::GATEWAY_INVALIDATE_SESSION
@@ -243,13 +247,14 @@ async fn real_main() -> ApiResult<()> {
                 Event::ShardPayload(data) => {
                     match serde_json::from_slice::<PayloadInfo>(data.bytes.as_slice()) {
                         Ok(payload) => {
-                            if let Some(kind) = payload.t.clone() {
+                            if let Some(kind) = payload.t {
                                 GATEWAY_EVENTS
-                                    .with_label_values(&[kind.as_str(), shard.to_string().as_str()])
+                                    .with_label_values(&[
+                                        kind.as_str(),
+                                        shard_strings[shard].as_str(),
+                                    ])
                                     .inc();
-                            }
 
-                            if payload.op == OpCode::Event {
                                 let result = channel
                                     .basic_publish(
                                         "",
