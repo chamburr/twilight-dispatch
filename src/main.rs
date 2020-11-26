@@ -240,16 +240,16 @@ async fn real_main() -> ApiResult<()> {
                     info!("[Shard {}] Resuming (sequence: {})", shard, data.seq);
                     SHARD_EVENTS.with_label_values(&["Resuming"]).inc();
                 }
-                Event::ShardPayload(data) => match String::from_utf8(data.bytes.clone()) {
-                    Ok(payload) => match serde_json::from_str::<PayloadInfo>(payload.as_str()) {
-                        Ok(info) => {
-                            if let Some(kind) = info.t.clone() {
+                Event::ShardPayload(data) => {
+                    match serde_json::from_slice::<PayloadInfo>(data.bytes.as_slice()) {
+                        Ok(payload) => {
+                            if let Some(kind) = payload.t.clone() {
                                 GATEWAY_EVENTS
                                     .with_label_values(&[kind.as_str(), shard.to_string().as_str()])
                                     .inc();
                             }
 
-                            if info.op == OpCode::Event {
+                            if payload.op == OpCode::Event {
                                 let result = channel
                                     .basic_publish(
                                         "",
@@ -266,13 +266,10 @@ async fn real_main() -> ApiResult<()> {
                             }
                         }
                         Err(err) => {
-                            warn!("[Shard {}] Failed to get payload info: {:?}", shard, err);
+                            warn!("[Shard {}] Could not decode payload: {:?}", shard, err);
                         }
-                    },
-                    Err(err) => {
-                        warn!("[Shard {}] Could not decode payload: {:?}", shard, err);
                     }
-                },
+                }
                 _ => {}
             }
         }

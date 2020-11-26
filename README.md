@@ -68,7 +68,7 @@ Information related to the gateway are stored in Redis.
 
 These are the steps to installing and running the service.
 
-### Prerequisites 
+### Prerequisites
 
 - Rust: https://www.rust-lang.org/tools/install
 - RabbitMQ: https://www.rabbitmq.com/download.html
@@ -85,7 +85,7 @@ Run the following commands to start the service.
 
 ```
 cargo build --release
-cargo run
+cargo run --release
 ```
 
 ## Related Resources
