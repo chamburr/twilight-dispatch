@@ -170,7 +170,15 @@ async fn real_main() -> ApiResult<()> {
                     SHARD_EVENTS.with_label_values(&["Ready"]).inc();
                 }
                 Event::Resumed => {
-                    info!("[Shard {}] Resumed", shard);
+                    if let Ok(info) = cluster_clone.shard(shard).unwrap().info() {
+                        info!(
+                            "[Shard {}] Resumed (session: {})",
+                            shard,
+                            info.session_id().unwrap()
+                        );
+                    } else {
+                        info!("[Shard {}] Resumed", shard);
+                    }
                     log_discord(
                         &cluster_clone,
                         RESUME_COLOR,
