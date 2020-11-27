@@ -5,10 +5,13 @@ use crate::models::{ApiResult, SessionInfo};
 use chrono::Utc;
 use std::collections::HashMap;
 use std::env;
+use std::sync::Arc;
 use tracing::warn;
 use twilight_gateway::cluster::ShardScheme;
+use twilight_gateway::queue::{LargeBotQueue, LocalQueue, Queue};
 use twilight_gateway::shard::ResumeSession;
 use twilight_gateway::Cluster;
+use twilight_http::Client;
 use twilight_model::channel::embed::Embed;
 use twilight_model::gateway::payload::update_status::UpdateStatusInfo;
 use twilight_model::gateway::presence::{Activity, ActivityType, Status};
@@ -33,6 +36,19 @@ pub fn get_shard_scheme() -> ApiResult<ShardScheme> {
         to: env::var("SHARDS_END")?.parse()?,
         total: env::var("SHARDS_TOTAL")?.parse()?,
     })
+}
+
+pub async fn get_queue() -> ApiResult<Arc<Box<dyn Queue>>> {
+    let concurrency: usize = env::var("SHARDS_CONCURRENCY")?.parse()?;
+
+    if concurrency == 1 {
+        Ok(Arc::new(Box::new(LocalQueue::new())))
+    } else {
+        let client = Client::new(env::var("BOT_TOKEN")?);
+        Ok(Arc::new(Box::new(
+            LargeBotQueue::new(concurrency, &client).await,
+        )))
+    }
 }
 
 pub fn get_update_status_info() -> ApiResult<UpdateStatusInfo> {

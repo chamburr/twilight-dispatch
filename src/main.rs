@@ -5,7 +5,8 @@ use crate::constants::{
 use crate::metrics::{GATEWAY_EVENTS, SHARD_EVENTS};
 use crate::models::{ApiResult, DeliveryInfo, DeliveryOpcode, PayloadInfo, SessionInfo};
 use crate::utils::{
-    get_gateway_url, get_resume_sessions, get_shard_scheme, get_update_status_info, log_discord,
+    get_gateway_url, get_queue, get_resume_sessions, get_shard_scheme, get_update_status_info,
+    log_discord,
 };
 
 use chrono::Utc;
@@ -23,7 +24,6 @@ use tracing::{error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use twilight_gateway::{Cluster, Event, EventTypeFlags, Intents};
-use twilight_model::gateway::OpCode;
 
 mod cache;
 mod constants;
@@ -97,23 +97,22 @@ async fn real_main() -> ApiResult<()> {
         let _ = metrics::run_server().await;
     });
 
+    let resumes = get_resume_sessions(&mut conn).await?;
     let cluster = Cluster::builder(
         env::var("BOT_TOKEN")?,
         Intents::from_bits(env::var("INTENTS")?.parse()?).unwrap(),
     )
     .gateway_url(Some(get_gateway_url()?))
     .shard_scheme(get_shard_scheme()?)
+    .queue(get_queue().await?)
     .presence(get_update_status_info()?)
     .large_threshold(env::var("LARGE_THRESHOLD")?.parse()?)?
-    .resume_sessions(get_resume_sessions(&mut conn).await?)
+    .resume_sessions(resumes.clone())
     .build()
     .await?;
 
     info!("Starting up {} shards", cluster.shards().len());
-    info!(
-        "Resuming {} sessions",
-        get_resume_sessions(&mut conn).await?.len()
-    );
+    info!("Resuming {} sessions", resumes.len());
 
     cache::set(&mut conn, STARTED_KEY, &Utc::now().naive_utc()).await?;
     cache::set(&mut conn, SHARDS_KEY, &cluster.shards().len()).await?;
@@ -251,7 +250,7 @@ async fn real_main() -> ApiResult<()> {
                                 GATEWAY_EVENTS
                                     .with_label_values(&[
                                         kind.as_str(),
-                                        shard_strings[shard].as_str(),
+                                        shard_strings[shard as usize].as_str(),
                                     ])
                                     .inc();
 

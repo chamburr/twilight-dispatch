@@ -18,6 +18,7 @@ either through Direct Message or on the [Twilight server](https://discord.gg/7jj
 
 - Low CPU and RAM footprint
 - Custom gateway API version
+- Large bot sharding support
 - Resumable sessions after restart
 - Discord channel status logging
 - Prometheus metrics
@@ -29,9 +30,9 @@ either through Direct Message or on the [Twilight server](https://discord.gg/7jj
 
 Gateway events are forwarded to and from RabbitMQ.
 
-To receive events, connect to a channel `gateway`. The decoded and decompressed events from Discord
-gateway will be available in the message queue. You should consume the events and send an ack in
-response before processing it.
+To receive events, connect to a channel `gateway`. The decoded and decompressed dispatch events from
+Discord gateway will be available in the message queue. You should consume the events and send an
+ack in response before processing it.
 
 To send events to the gateway, connect to a channel `gateway.send`, then publish a message such as
 the following. Note that the outer most `op` is not the Discord gateway OP code. The only option for
