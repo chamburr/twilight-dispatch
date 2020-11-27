@@ -16,6 +16,7 @@ serde_json = "1.0.59"
 serde_repr = "0.1.6"
 tracing = "0.1.21"
 tracing-subscriber = "0.2.15"
+twilight-http = "0.2.4"
 twilight-model = "0.2.3"
 
 [dependencies.chrono]

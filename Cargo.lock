@@ -2290,6 +2290,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "twilight-gateway",
+ "twilight-http",
  "twilight-model",
 ]
 
