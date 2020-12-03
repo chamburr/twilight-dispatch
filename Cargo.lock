@@ -2284,6 +2284,7 @@ dependencies = [
  "prometheus",
  "redis",
  "serde",
+ "serde-mappable-seq",
  "serde_json",
  "serde_repr",
  "tokio",

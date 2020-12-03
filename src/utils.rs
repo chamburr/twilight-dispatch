@@ -1,10 +1,10 @@
 use crate::cache;
+use crate::config::get_config;
 use crate::constants::{SESSIONS_KEY, SHARDS_KEY};
 use crate::models::{ApiResult, SessionInfo};
 
 use chrono::Utc;
 use std::collections::HashMap;
-use std::env;
 use std::sync::Arc;
 use tracing::warn;
 use twilight_gateway::cluster::ShardScheme;
@@ -14,13 +14,14 @@ use twilight_gateway::Cluster;
 use twilight_http::Client;
 use twilight_model::channel::embed::Embed;
 use twilight_model::gateway::payload::update_status::UpdateStatusInfo;
-use twilight_model::gateway::presence::{Activity, ActivityType, Status};
-use twilight_model::id::ChannelId;
+use twilight_model::gateway::presence::Activity;
+use twilight_model::id::{ChannelId, GuildId};
 
 pub fn get_gateway_url() -> ApiResult<String> {
-    let version = env::var("API_VERSION")?;
+    let config = get_config();
+    let version = config.api_version;
 
-    if version == "8" {
+    if version == 8 {
         Ok("wss://gateway.discord.gg".to_owned())
     } else {
         Ok(format!(
@@ -31,20 +32,22 @@ pub fn get_gateway_url() -> ApiResult<String> {
 }
 
 pub fn get_shard_scheme() -> ApiResult<ShardScheme> {
+    let config = get_config();
     Ok(ShardScheme::Range {
-        from: env::var("SHARDS_START")?.parse()?,
-        to: env::var("SHARDS_END")?.parse()?,
-        total: env::var("SHARDS_TOTAL")?.parse()?,
+        from: config.shards_start,
+        to: config.shards_end,
+        total: config.shards_total,
     })
 }
 
 pub async fn get_queue() -> ApiResult<Arc<Box<dyn Queue>>> {
-    let concurrency: usize = env::var("SHARDS_CONCURRENCY")?.parse()?;
+    let config = get_config();
+    let concurrency = config.shards_concurrency as usize;
 
     if concurrency == 1 {
         Ok(Arc::new(Box::new(LocalQueue::new())))
     } else {
-        let client = Client::new(env::var("BOT_TOKEN")?);
+        let client = Client::new(config.bot_token);
         Ok(Arc::new(Box::new(
             LargeBotQueue::new(concurrency, &client).await,
         )))
@@ -52,6 +55,8 @@ pub async fn get_queue() -> ApiResult<Arc<Box<dyn Queue>>> {
 }
 
 pub fn get_update_status_info() -> ApiResult<UpdateStatusInfo> {
+    let config = get_config();
+
     Ok(UpdateStatusInfo::new(
         vec![Activity {
             application_id: None,
@@ -62,15 +67,8 @@ pub fn get_update_status_info() -> ApiResult<UpdateStatusInfo> {
             flags: None,
             id: None,
             instance: None,
-            kind: match env::var("ACTIVITY_TYPE")?.as_str() {
-                "playing" => ActivityType::Playing,
-                "watching" => ActivityType::Watching,
-                "listening" => ActivityType::Listening,
-                "streaming" => ActivityType::Streaming,
-                "competing" => ActivityType::Competing,
-                _ => panic!("Invalid ACTIVITY_TYPE provided"),
-            },
-            name: env::var("ACTIVITY_NAME")?,
+            kind: config.activity_type,
+            name: config.activity_name,
             party: None,
             secrets: None,
             state: None,
@@ -79,22 +77,17 @@ pub fn get_update_status_info() -> ApiResult<UpdateStatusInfo> {
         }],
         false,
         None,
-        match env::var("STATUS")?.as_str() {
-            "online" => Status::Online,
-            "idle" => Status::Idle,
-            "dnd" => Status::DoNotDisturb,
-            "invisible" => Status::Invisible,
-            _ => panic!("Invalid STATUS provided"),
-        },
+        config.status,
     ))
 }
 
 pub async fn get_resume_sessions(
     conn: &mut redis::aio::Connection,
 ) -> ApiResult<HashMap<u64, ResumeSession>> {
-    let shards: u64 = cache::get(conn, SHARDS_KEY).await?.unwrap_or_default();
+    let config = get_config();
 
-    if shards != env::var("SHARDS_TOTAL")?.parse::<u64>()? || env::var("RESUME")? == "false" {
+    let shards: u64 = cache::get(conn, SHARDS_KEY).await?.unwrap_or_default();
+    if shards != config.shards_total || !config.resume {
         return Ok(HashMap::new());
     }
 
@@ -116,18 +109,11 @@ pub async fn get_resume_sessions(
 }
 
 pub async fn log_discord(cluster: &Cluster, color: usize, message: impl Into<String>) {
+    let config = get_config();
     let client = cluster.config().http_client();
 
-    if env::var("LOG_CHANNEL").is_err() {
-        return;
-    }
-
-    if env::var("LOG_CHANNEL").unwrap().parse::<u64>().is_err() {
-        return;
-    }
-
     let message = client
-        .create_message(ChannelId(env::var("LOG_CHANNEL").unwrap().parse().unwrap()))
+        .create_message(ChannelId(config.log_channel))
         .embed(Embed {
             author: None,
             color: Some(color as u32),
@@ -149,4 +135,8 @@ pub async fn log_discord(cluster: &Cluster, color: usize, message: impl Into<Str
             warn!("Failed to post message to Discord: {:?}", err)
         }
     }
+}
+
+pub fn get_guild_shard(guild_id: GuildId) -> u64 {
+    (guild_id.0 >> 22) % get_config().shards_total
 }
