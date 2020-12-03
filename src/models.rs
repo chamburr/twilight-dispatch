@@ -6,7 +6,7 @@ use prometheus::Error as PrometheusError;
 use redis::RedisError;
 use serde::export::Formatter;
 use serde::{Deserialize, Serialize};
-use serde_json::Error as SerdeJsonError;
+use serde_json::{Error as SerdeJsonError, Value};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::env::VarError;
 use std::error::Error;
@@ -39,6 +39,15 @@ pub struct PayloadInfo {
     pub t: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct PayloadData {
+    pub op: OpCode,
+    pub t: Option<String>,
+    pub d: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old: Option<Value>,
+}
+
 #[derive(Clone, Debug, Deserialize_repr, Serialize_repr)]
 #[repr(u8)]
 pub enum DeliveryOpcode {
@@ -50,7 +59,7 @@ pub enum DeliveryOpcode {
 pub struct DeliveryInfo {
     pub op: DeliveryOpcode,
     pub shard: u64,
-    pub data: Option<serde_json::Value>,
+    pub data: Option<Value>,
 }
 
 pub type ApiResult<T> = Result<T, ApiError>;

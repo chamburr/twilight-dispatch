@@ -1,9 +1,12 @@
+use crate::config::get_config;
 use crate::constants::{
     CONNECT_COLOR, DISCONNECT_COLOR, QUEUE_RECV, QUEUE_SEND, READY_COLOR, RESUME_COLOR,
     SESSIONS_KEY, SHARDS_KEY, STARTED_KEY,
 };
 use crate::metrics::{GATEWAY_EVENTS, SHARD_EVENTS};
-use crate::models::{ApiResult, DeliveryInfo, DeliveryOpcode, PayloadInfo, SessionInfo};
+use crate::models::{
+    ApiResult, DeliveryInfo, DeliveryOpcode, PayloadData, PayloadInfo, SessionInfo,
+};
 use crate::utils::{
     get_gateway_url, get_queue, get_resume_sessions, get_shard_scheme, get_update_status_info,
     log_discord,
@@ -18,7 +21,6 @@ use lapin::options::{
 use lapin::types::FieldTable;
 use lapin::BasicProperties;
 use std::collections::HashMap;
-use std::env;
 use tokio::signal::unix::{signal, SignalKind};
 use tracing::{error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
@@ -26,6 +28,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use twilight_gateway::{Cluster, Event, EventTypeFlags, Intents};
 
 mod cache;
+mod config;
 mod constants;
 mod metrics;
 mod models;
@@ -34,8 +37,9 @@ mod utils;
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+    config::init();
 
-    if env::var("RUST_LOG").unwrap_or_default().to_lowercase() == "info" {
+    if get_config().rust_log.to_lowercase() == "info" {
         tracing_subscriber::registry()
             .with(tracing_subscriber::fmt::layer())
             .with(
@@ -56,21 +60,17 @@ async fn main() {
 }
 
 async fn real_main() -> ApiResult<()> {
+    let config = get_config();
+
     let redis = redis::Client::open(format!(
         "redis://{}:{}/",
-        env::var("REDIS_HOST")?,
-        env::var("REDIS_PORT")?,
+        config.redis_host, config.redis_port
     ))?;
 
     let mut conn = redis.get_async_connection().await?;
 
     let amqp = lapin::Connection::connect(
-        format!(
-            "amqp://{}:{}/%2f",
-            env::var("RABBIT_HOST")?,
-            env::var("RABBIT_PORT")?,
-        )
-        .as_str(),
+        format!("amqp://{}:{}/%2f", config.rabbit_host, config.rabbit_port).as_str(),
         lapin::ConnectionProperties::default(),
     )
     .await?;
@@ -99,14 +99,14 @@ async fn real_main() -> ApiResult<()> {
 
     let resumes = get_resume_sessions(&mut conn).await?;
     let cluster = Cluster::builder(
-        env::var("BOT_TOKEN")?,
-        Intents::from_bits(env::var("INTENTS")?.parse()?).unwrap(),
+        config.bot_token.clone(),
+        Intents::from_bits(config.intents).unwrap(),
     )
     .gateway_url(Some(get_gateway_url()?))
     .shard_scheme(get_shard_scheme()?)
     .queue(get_queue().await?)
     .presence(get_update_status_info()?)
-    .large_threshold(env::var("LARGE_THRESHOLD")?.parse()?)?
+    .large_threshold(config.large_threshold)?
     .resume_sessions(resumes.clone())
     .build()
     .await?;
@@ -133,28 +133,76 @@ async fn real_main() -> ApiResult<()> {
         cluster_clone.up().await;
     });
 
+    let mut conn_clone = redis.get_async_connection().await?;
     let cluster_clone = cluster.clone();
     tokio::spawn(async move {
         let shard_strings: Vec<String> = (0..cluster_clone.shards().len())
             .map(|x| x.to_string())
             .collect();
 
-        let mut events = cluster_clone.some_events(
-            EventTypeFlags::GATEWAY_HELLO
-                | EventTypeFlags::GATEWAY_INVALIDATE_SESSION
-                | EventTypeFlags::GATEWAY_RECONNECT
-                | EventTypeFlags::READY
-                | EventTypeFlags::RESUMED
-                | EventTypeFlags::SHARD_CONNECTED
-                | EventTypeFlags::SHARD_CONNECTING
-                | EventTypeFlags::SHARD_DISCONNECTED
-                | EventTypeFlags::SHARD_IDENTIFYING
-                | EventTypeFlags::SHARD_PAYLOAD
-                | EventTypeFlags::SHARD_RECONNECTING
-                | EventTypeFlags::SHARD_RESUMING,
-        );
+        let mut event_flags = EventTypeFlags::GATEWAY_HELLO
+            | EventTypeFlags::GATEWAY_INVALIDATE_SESSION
+            | EventTypeFlags::GATEWAY_RECONNECT
+            | EventTypeFlags::READY
+            | EventTypeFlags::RESUMED
+            | EventTypeFlags::SHARD_CONNECTED
+            | EventTypeFlags::SHARD_CONNECTING
+            | EventTypeFlags::SHARD_DISCONNECTED
+            | EventTypeFlags::SHARD_IDENTIFYING
+            | EventTypeFlags::SHARD_PAYLOAD
+            | EventTypeFlags::SHARD_RECONNECTING
+            | EventTypeFlags::SHARD_RESUMING;
+
+        if config.state_enabled {
+            event_flags |= EventTypeFlags::CHANNEL_CREATE
+                | EventTypeFlags::CHANNEL_DELETE
+                | EventTypeFlags::CHANNEL_PINS_UPDATE
+                | EventTypeFlags::CHANNEL_UPDATE
+                | EventTypeFlags::GUILD_CREATE
+                | EventTypeFlags::GUILD_DELETE
+                | EventTypeFlags::GUILD_EMOJIS_UPDATE
+                | EventTypeFlags::GUILD_UPDATE
+                | EventTypeFlags::ROLE_CREATE
+                | EventTypeFlags::ROLE_DELETE
+                | EventTypeFlags::ROLE_UPDATE
+                | EventTypeFlags::UNAVAILABLE_GUILD
+                | EventTypeFlags::USER_UPDATE
+                | EventTypeFlags::VOICE_STATE_UPDATE;
+
+            if config.state_member {
+                event_flags |= EventTypeFlags::MEMBER_ADD
+                    | EventTypeFlags::MEMBER_REMOVE
+                    | EventTypeFlags::MEMBER_CHUNK
+                    | EventTypeFlags::MEMBER_UPDATE;
+
+                if config.state_presence {
+                    event_flags |= EventTypeFlags::PRESENCE_UPDATE;
+                }
+            }
+
+            if config.state_message {
+                event_flags |= EventTypeFlags::MESSAGE_CREATE
+                    | EventTypeFlags::MESSAGE_DELETE
+                    | EventTypeFlags::MESSAGE_DELETE_BULK
+                    | EventTypeFlags::MEMBER_UPDATE;
+            }
+        }
+
+        let mut events = cluster_clone.some_events(event_flags);
 
         while let Some((shard, event)) = events.next().await {
+            let mut old = None;
+            if config.state_enabled {
+                match cache::update(&mut conn_clone, &event).await {
+                    Ok(value) => {
+                        old = value;
+                    }
+                    Err(err) => {
+                        warn!("Failed to update state: {:?}", err);
+                    }
+                }
+            }
+
             match event {
                 Event::GatewayHello(data) => {
                     info!("[Shard {}] Hello (heartbeat interval: {})", shard, data);
@@ -244,12 +292,57 @@ async fn real_main() -> ApiResult<()> {
                     SHARD_EVENTS.with_label_values(&["Resuming"]).inc();
                 }
                 Event::ShardPayload(data) => {
-                    match serde_json::from_slice::<PayloadInfo>(data.bytes.as_slice()) {
-                        Ok(payload) => {
-                            if let Some(kind) = payload.t {
+                    match serde_json::from_slice::<PayloadData>(data.bytes.as_slice()) {
+                        Ok(mut payload) => {
+                            if let Some(kind) = payload.t.as_deref() {
                                 GATEWAY_EVENTS
                                     .with_label_values(&[
-                                        kind.as_str(),
+                                        kind,
+                                        shard_strings[shard as usize].as_str(),
+                                    ])
+                                    .inc();
+
+                                payload.old = old;
+
+                                match serde_json::to_vec(&payload) {
+                                    Ok(payload) => {
+                                        let result = channel
+                                            .basic_publish(
+                                                "",
+                                                QUEUE_RECV,
+                                                BasicPublishOptions::default(),
+                                                payload,
+                                                BasicProperties::default(),
+                                            )
+                                            .await;
+
+                                        if let Err(err) = result {
+                                            warn!(
+                                                "[Shard {}] Failed to publish event: {:?}",
+                                                shard, err
+                                            );
+                                        }
+                                    }
+                                    Err(err) => {
+                                        warn!(
+                                            "[Shard {}] Failed to serialize payload: {:?}",
+                                            shard, err
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            warn!("[Shard {}] Could not decode payload: {:?}", shard, err);
+                        }
+                    }
+
+                    match serde_json::from_slice::<PayloadInfo>(data.bytes.as_slice()) {
+                        Ok(payload) => {
+                            if let Some(kind) = payload.t.as_deref() {
+                                GATEWAY_EVENTS
+                                    .with_label_values(&[
+                                        kind,
                                         shard_strings[shard as usize].as_str(),
                                     ])
                                     .inc();
@@ -292,6 +385,9 @@ async fn real_main() -> ApiResult<()> {
         while let Some(message) = consumer.next().await {
             match message {
                 Ok((channel, delivery)) => {
+                    let _ = channel
+                        .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
+                        .await;
                     match serde_json::from_slice::<DeliveryInfo>(delivery.data.as_slice()) {
                         Ok(payload) => {
                             let shard = cluster_clone.shard(payload.shard);
@@ -318,10 +414,6 @@ async fn real_main() -> ApiResult<()> {
                             warn!("Failed to deserialize payload: {:?}", err);
                         }
                     }
-
-                    let _ = channel
-                        .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-                        .await;
                 }
                 Err(err) => {
                     warn!("Failed to consume delivery: {:?}", err);
