@@ -39,4 +39,4 @@ features = ["macros", "rt-core", "rt-threaded", "signal", "time"]
 [dependencies.twilight-gateway]
 version = "0.2.3"
 default-features = false
-features = ["simd-zlib", "rustls"]
+features = ["rustls", "simd-json", "simd-zlib"]
