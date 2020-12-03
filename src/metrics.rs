@@ -1,3 +1,4 @@
+use crate::config::get_config;
 use crate::constants::METRICS_DUMP_INTERVAL;
 use crate::models::ApiResult;
 
@@ -10,7 +11,6 @@ use prometheus::{
     IntGauge, IntGaugeVec, TextEncoder,
 };
 use std::collections::HashMap;
-use std::env;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use tokio::time;
@@ -69,9 +69,11 @@ async fn serve(req: Request<Body>) -> ApiResult<Response<Body>> {
 }
 
 pub async fn run_server() -> ApiResult<()> {
+    let config = get_config();
+
     let addr = SocketAddr::new(
-        IpAddr::from_str(env::var("PROMETHEUS_HOST")?.as_str())?,
-        env::var("PROMETHEUS_PORT")?.parse()?,
+        IpAddr::from_str(config.prometheus_host.as_str())?,
+        config.prometheus_port as u16,
     );
 
     let make_svc = make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(serve)) });
