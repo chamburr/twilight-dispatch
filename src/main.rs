@@ -291,8 +291,8 @@ async fn real_main() -> ApiResult<()> {
                     info!("[Shard {}] Resuming (sequence: {})", shard, data.seq);
                     SHARD_EVENTS.with_label_values(&["Resuming"]).inc();
                 }
-                Event::ShardPayload(data) => {
-                    match serde_json::from_slice::<PayloadData>(data.bytes.as_slice()) {
+                Event::ShardPayload(mut data) if config.state_enabled => {
+                    match simd_json::from_slice::<PayloadData>(data.bytes.as_mut_slice()) {
                         Ok(mut payload) => {
                             if let Some(kind) = payload.t.as_deref() {
                                 GATEWAY_EVENTS
@@ -304,7 +304,7 @@ async fn real_main() -> ApiResult<()> {
 
                                 payload.old = old;
 
-                                match serde_json::to_vec(&payload) {
+                                match simd_json::to_vec(&payload) {
                                     Ok(payload) => {
                                         let result = channel
                                             .basic_publish(
@@ -336,8 +336,9 @@ async fn real_main() -> ApiResult<()> {
                             warn!("[Shard {}] Could not decode payload: {:?}", shard, err);
                         }
                     }
-
-                    match serde_json::from_slice::<PayloadInfo>(data.bytes.as_slice()) {
+                }
+                Event::ShardPayload(mut data) => {
+                    match simd_json::from_slice::<PayloadInfo>(data.bytes.as_mut_slice()) {
                         Ok(payload) => {
                             if let Some(kind) = payload.t.as_deref() {
                                 GATEWAY_EVENTS
@@ -384,11 +385,11 @@ async fn real_main() -> ApiResult<()> {
     tokio::spawn(async move {
         while let Some(message) = consumer.next().await {
             match message {
-                Ok((channel, delivery)) => {
+                Ok((channel, mut delivery)) => {
                     let _ = channel
                         .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
                         .await;
-                    match serde_json::from_slice::<DeliveryInfo>(delivery.data.as_slice()) {
+                    match simd_json::from_slice::<DeliveryInfo>(delivery.data.as_mut_slice()) {
                         Ok(payload) => {
                             let shard = cluster_clone.shard(payload.shard);
                             if shard.is_some() {

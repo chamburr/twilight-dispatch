@@ -1,4 +1,3 @@
-use crate::cache;
 use crate::config::get_config;
 use crate::constants::{
     channel_key, channel_match_key, emoji_key, emoji_match_key, guild_key, guild_match_key,
@@ -7,14 +6,15 @@ use crate::constants::{
     CACHE_DUMP_INTERVAL, STATUSES_KEY,
 };
 use crate::models::{ApiResult, StatusInfo};
-
 use crate::utils::get_guild_shard;
+use crate::{cache, utils};
+
 use chrono::{Duration, Utc};
 use redis::{AsyncCommands, AsyncIter, ToRedisArgs};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::Value;
 use serde_mappable_seq::Key;
+use simd_json::owned::Value;
 use std::collections::HashMap;
 use std::ops::Sub;
 use tokio::time;
@@ -32,7 +32,7 @@ pub async fn get<T: DeserializeOwned>(
     let res: Option<String> = conn.get(key.to_string()).await?;
 
     Ok(res
-        .map(|value| serde_json::from_str(value.as_str()))
+        .map(|mut value| simd_json::from_str(value.as_mut_str()))
         .transpose()?)
 }
 
@@ -50,7 +50,7 @@ pub async fn set<T: Serialize>(
     key: impl ToString,
     value: &T,
 ) -> ApiResult<()> {
-    let value = serde_json::to_string(value)?;
+    let value = simd_json::to_string(value)?;
     conn.set(key.to_string(), value).await?;
 
     Ok(())
@@ -306,7 +306,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     }
                 }
             }
-            old = Some(serde_json::to_value(emojis)?);
+            old = Some(utils::to_value(&emojis)?);
             for emoji in data.emojis.values() {
                 set(conn, emoji_key(data.guild_id, emoji.id), emoji).await?
             }
@@ -337,7 +337,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 let member: Option<Member> =
                     get(conn, member_key(data.guild_id, data.user.id)).await?;
                 if let Some(mut member) = member {
-                    old = Some(serde_json::to_value(member.clone())?);
+                    old = Some(utils::to_value(&member)?);
                     member.joined_at = Some(data.joined_at.clone());
                     member.nick = data.nick.clone();
                     member.premium_since = data.premium_since.clone();
@@ -394,7 +394,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         del(conn, message_key(data.channel_id, *id)).await?;
                     }
                 }
-                old = Some(serde_json::to_value(messages)?);
+                old = Some(utils::to_value(&messages)?);
             }
         }
         Event::MessageUpdate(data) => {
@@ -402,7 +402,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 let message: Option<Message> =
                     get(conn, message_key(data.channel_id, data.id)).await?;
                 if let Some(mut message) = message {
-                    old = Some(serde_json::to_value(message.clone())?);
+                    old = Some(utils::to_value(&message)?);
                     if let Some(attachments) = &data.attachments {
                         message.attachments = attachments.clone();
                     }

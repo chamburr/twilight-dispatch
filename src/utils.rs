@@ -4,6 +4,8 @@ use crate::constants::{SESSIONS_KEY, SHARDS_KEY};
 use crate::models::{ApiResult, SessionInfo};
 
 use chrono::Utc;
+use serde::Serialize;
+use simd_json::owned::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::warn;
@@ -139,4 +141,14 @@ pub async fn log_discord(cluster: &Cluster, color: usize, message: impl Into<Str
 
 pub fn get_guild_shard(guild_id: GuildId) -> u64 {
     (guild_id.0 >> 22) % get_config().shards_total
+}
+
+pub fn to_value<T>(value: &T) -> ApiResult<Value>
+where
+    T: Serialize + ?Sized,
+{
+    let mut bytes = simd_json::to_vec(value)?;
+    let result = simd_json::owned::to_value(bytes.as_mut_slice())?;
+
+    Ok(result)
 }
