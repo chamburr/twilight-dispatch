@@ -6,8 +6,9 @@ use prometheus::Error as PrometheusError;
 use redis::RedisError;
 use serde::export::Formatter;
 use serde::{Deserialize, Serialize};
-use serde_json::{Error as SerdeJsonError, Value};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use simd_json::owned::Value;
+use simd_json::Error as SimdJsonError;
 use std::env::VarError;
 use std::error::Error;
 use std::fmt::{self, Display};
@@ -67,7 +68,7 @@ pub type ApiResult<T> = Result<T, ApiError>;
 #[derive(Debug)]
 pub enum ApiError {
     EmptyError(()),
-    SerdeJsonError(SerdeJsonError),
+    SimdJsonError(SimdJsonError),
     RedisError(RedisError),
     VarError(VarError),
     ParseIntError(ParseIntError),
@@ -95,9 +96,9 @@ impl From<()> for ApiError {
     }
 }
 
-impl From<SerdeJsonError> for ApiError {
-    fn from(err: SerdeJsonError) -> Self {
-        Self::SerdeJsonError(err)
+impl From<SimdJsonError> for ApiError {
+    fn from(err: SimdJsonError) -> Self {
+        Self::SimdJsonError(err)
     }
 }
 
