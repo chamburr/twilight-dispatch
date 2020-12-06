@@ -331,6 +331,9 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 old = get(conn, member_key(data.guild_id, data.user.id)).await?;
                 del(conn, member_key(data.guild_id, data.user.id)).await?;
             }
+            if config.state_presence {
+                del(conn, presence_key(data.guild_id, data.user.id)).await?;
+            }
         }
         Event::MemberUpdate(data) => {
             if config.state_member {
