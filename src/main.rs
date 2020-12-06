@@ -5,14 +5,14 @@ use crate::constants::{
 };
 use crate::metrics::{GATEWAY_EVENTS, SHARD_EVENTS};
 use crate::models::{
-    ApiResult, DeliveryInfo, DeliveryOpcode, PayloadData, PayloadInfo, SessionInfo,
+    ApiResult, DeliveryInfo, DeliveryOpcode, FormattedOffsetDateTime, PayloadData, PayloadInfo,
+    SessionInfo,
 };
 use crate::utils::{
     get_gateway_url, get_queue, get_resume_sessions, get_shard_scheme, get_update_status_info,
     log_discord,
 };
 
-use chrono::Utc;
 use dotenv::dotenv;
 use futures::StreamExt;
 use lapin::options::{
@@ -114,7 +114,7 @@ async fn real_main() -> ApiResult<()> {
     info!("Starting up {} shards", cluster.shards().len());
     info!("Resuming {} sessions", resumes.len());
 
-    cache::set(&mut conn, STARTED_KEY, &Utc::now().naive_utc()).await?;
+    cache::set(&mut conn, STARTED_KEY, &FormattedOffsetDateTime::now_utc()).await?;
     cache::set(&mut conn, SHARDS_KEY, &cluster.shards().len()).await?;
 
     let mut conn_clone = redis.get_async_connection().await?;
@@ -428,12 +428,12 @@ async fn real_main() -> ApiResult<()> {
 
     info!("Shutting down");
 
-    let sessions: HashMap<u64, SessionInfo> = cluster
+    let sessions: HashMap<String, SessionInfo> = cluster
         .down_resumable()
         .iter()
         .map(|(k, v)| {
             (
-                *k,
+                k.to_string(),
                 SessionInfo {
                     session_id: v.session_id.clone(),
                     sequence: v.sequence,

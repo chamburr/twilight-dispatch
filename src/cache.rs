@@ -5,18 +5,17 @@ use crate::constants::{
     private_channel_key, role_key, role_match_key, voice_key, voice_match_key, BOT_USER_KEY,
     CACHE_DUMP_INTERVAL, STATUSES_KEY,
 };
-use crate::models::{ApiResult, StatusInfo};
+use crate::models::{ApiResult, FormattedOffsetDateTime, StatusInfo};
 use crate::utils::get_guild_shard;
 use crate::{cache, utils};
 
-use chrono::{Duration, Utc};
+use ::time::Duration;
 use redis::{AsyncCommands, AsyncIter, ToRedisArgs};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_mappable_seq::Key;
 use simd_json::owned::Value;
 use std::collections::HashMap;
-use std::ops::Sub;
 use tokio::time;
 use tracing::warn;
 use twilight_gateway::Cluster;
@@ -97,11 +96,10 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, cluster: &Cluster) {
                     .latency()
                     .received()
                     .map(|value| {
-                        Utc::now()
-                            .naive_utc()
-                            .sub(Duration::milliseconds(value.elapsed().as_millis() as i64))
+                        FormattedOffsetDateTime::now_utc()
+                            - Duration::milliseconds(value.elapsed().as_millis() as i64)
                     })
-                    .unwrap_or_else(|| Utc::now().naive_utc()),
+                    .unwrap_or_else(FormattedOffsetDateTime::now_utc),
             })
             .collect();
 
