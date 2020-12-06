@@ -5,38 +5,25 @@ authors = ["CHamburr <hi@chamburr.xyz>"]
 edition = "2018"
 
 [dependencies]
-backtrace = "0.3.54"
-dotenv = "0.15.0"
-futures = "0.3.8"
-hyper = "0.13.9"
-lapin = "1.5.0"
-lazy_static = "1.4.0"
-serde = "1.0.117"
-serde-mappable-seq = "0.1.0"
-serde_repr = "0.1.6"
-simd-json = "0.3.22"
-tracing = "0.1.21"
-tracing-subscriber = "0.2.15"
-twilight-http = "0.2.5"
-twilight-model = "0.2.4"
+backtrace = "0.3"
+dotenv = "0.15"
+futures = { version = "0.3", default-features = false }
+hyper = { version = "0.13", default-features = false }
+lapin = { version = "1.6", default-features = false }
+lazy_static = "1.4"
+prometheus = { version = "0.11", default-features = false, features = ["process"] }
+redis = { version = "0.17", default-features = false, features = ["tokio-rt-core"] }
+serde = "1.0"
+serde-mappable-seq = "0.1"
+serde_repr = "0.1"
+simd-json = { version = "0.3", default-features = false }
+time = { version = "0.2", default-features = false, features = ["std"] }
+tokio = { version = "0.2", default-features = false, features = ["rt-threaded", "macros", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "env-filter", "fmt", "registry"] }
+twilight-gateway = { version = "0.2", default-features = false, features = ["rustls", "simd-json", "simd-zlib"] }
+twilight-http = { version = "0.2", default-features = false, features = ["rustls", "simd-json"] }
+twilight-model = "0.2"
 
-[dependencies.chrono]
-version = "0.4.19"
-features = ["serde"]
-
-[dependencies.prometheus]
-version = "0.11.0"
-features = ["process"]
-
-[dependencies.redis]
-version = "0.17.0"
-features = ["tokio-rt-core"]
-
-[dependencies.tokio]
-version = "0.2.23"
-features = ["macros", "rt-core", "rt-threaded", "signal", "time"]
-
-[dependencies.twilight-gateway]
-version = "0.2.5"
-default-features = false
-features = ["rustls", "simd-json", "simd-zlib"]
+[profile.release]
+lto = "thin"
