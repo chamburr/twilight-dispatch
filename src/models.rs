@@ -1,11 +1,10 @@
-use chrono::NaiveDateTime;
 use hyper::http::Error as HyperHTTPError;
 use hyper::Error as HyperError;
 use lapin::Error as LapinError;
 use prometheus::Error as PrometheusError;
 use redis::RedisError;
 use serde::export::Formatter;
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use simd_json::owned::Value;
 use simd_json::Error as SimdJsonError;
@@ -15,9 +14,64 @@ use std::fmt::{self, Display};
 use std::io::Error as IoError;
 use std::net::AddrParseError;
 use std::num::ParseIntError;
+use std::ops::Sub;
+use time::{Duration, OffsetDateTime};
 use twilight_gateway::cluster::ClusterStartError;
 use twilight_gateway::shard::LargeThresholdError;
 use twilight_model::gateway::OpCode;
+
+#[derive(Debug, Clone)]
+pub struct FormattedOffsetDateTime(OffsetDateTime);
+
+impl FormattedOffsetDateTime {
+    pub fn now_utc() -> Self {
+        Self(OffsetDateTime::now_utc())
+    }
+}
+
+impl Sub<Duration> for FormattedOffsetDateTime {
+    type Output = Self;
+
+    fn sub(self, duration: Duration) -> Self::Output {
+        Self(self.0.sub(duration))
+    }
+}
+
+impl Serialize for FormattedOffsetDateTime {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0.format("%FT%T.%N"))
+    }
+}
+
+impl<'de> Deserialize<'de> for FormattedOffsetDateTime {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let string = String::deserialize(deserializer)?;
+        match OffsetDateTime::parse(string, "%FT%T.%N") {
+            Ok(dt) => Ok(Self(dt)),
+            Err(_) => Err(DeError::custom("not a valid formatted timestamp")),
+        }
+    }
+
+    fn deserialize_in_place<D>(deserializer: D, place: &mut Self) -> Result<(), D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let string = String::deserialize(deserializer)?;
+        match OffsetDateTime::parse(string, "%FT%T.%N") {
+            Ok(dt) => {
+                place.0 = dt;
+                Ok(())
+            }
+            Err(_) => Err(DeError::custom("not a valid formatted timestamp")),
+        }
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SessionInfo {
@@ -31,7 +85,7 @@ pub struct StatusInfo {
     pub status: String,
     pub session: String,
     pub latency: u64,
-    pub last_ack: NaiveDateTime,
+    pub last_ack: FormattedOffsetDateTime,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -3,11 +3,11 @@ use crate::config::get_config;
 use crate::constants::{SESSIONS_KEY, SHARDS_KEY};
 use crate::models::{ApiResult, SessionInfo};
 
-use chrono::Utc;
 use serde::Serialize;
 use simd_json::owned::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
+use time::{Format, OffsetDateTime};
 use tracing::warn;
 use twilight_gateway::cluster::ShardScheme;
 use twilight_gateway::queue::{LargeBotQueue, LocalQueue, Queue};
@@ -93,14 +93,14 @@ pub async fn get_resume_sessions(
         return Ok(HashMap::new());
     }
 
-    let sessions: HashMap<u64, SessionInfo> =
+    let sessions: HashMap<String, SessionInfo> =
         cache::get(conn, SESSIONS_KEY).await?.unwrap_or_default();
 
     Ok(sessions
         .iter()
         .map(|(k, v)| {
             (
-                *k,
+                k.parse().unwrap(),
                 ResumeSession {
                     session_id: v.session_id.clone(),
                     sequence: v.sequence,
@@ -126,7 +126,7 @@ pub async fn log_discord(cluster: &Cluster, color: usize, message: impl Into<Str
             kind: "".to_string(),
             provider: None,
             thumbnail: None,
-            timestamp: Some(Utc::now().to_rfc3339()),
+            timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
             title: Some(message.into()),
             url: None,
             video: None,
