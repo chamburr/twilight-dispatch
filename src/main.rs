@@ -5,7 +5,7 @@ use crate::constants::{
 };
 use crate::metrics::{GATEWAY_EVENTS, SHARD_EVENTS};
 use crate::models::{
-    ApiResult, DeliveryInfo, DeliveryOpcode, FormattedOffsetDateTime, PayloadData, PayloadInfo,
+    ApiResult, DeliveryInfo, DeliveryOpcode, FormattedDateTime, PayloadData, PayloadInfo,
     SessionInfo,
 };
 use crate::utils::{
@@ -114,7 +114,7 @@ async fn real_main() -> ApiResult<()> {
     info!("Starting up {} shards", cluster.shards().len());
     info!("Resuming {} sessions", resumes.len());
 
-    cache::set(&mut conn, STARTED_KEY, &FormattedOffsetDateTime::now_utc()).await?;
+    cache::set(&mut conn, STARTED_KEY, &FormattedDateTime::now_utc()).await?;
     cache::set(&mut conn, SHARDS_KEY, &cluster.shards().len()).await?;
 
     let mut conn_clone = redis.get_async_connection().await?;
@@ -184,7 +184,7 @@ async fn real_main() -> ApiResult<()> {
                 event_flags |= EventTypeFlags::MESSAGE_CREATE
                     | EventTypeFlags::MESSAGE_DELETE
                     | EventTypeFlags::MESSAGE_DELETE_BULK
-                    | EventTypeFlags::MEMBER_UPDATE;
+                    | EventTypeFlags::MESSAGE_UPDATE;
             }
         }
 

@@ -5,7 +5,7 @@ use crate::constants::{
     private_channel_key, role_key, role_match_key, voice_key, voice_match_key, BOT_USER_KEY,
     CACHE_DUMP_INTERVAL, STATUSES_KEY,
 };
-use crate::models::{ApiResult, FormattedOffsetDateTime, StatusInfo};
+use crate::models::{ApiResult, FormattedDateTime, StatusInfo};
 use crate::utils::get_guild_shard;
 use crate::{cache, utils};
 
@@ -96,10 +96,10 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, cluster: &Cluster) {
                     .latency()
                     .received()
                     .map(|value| {
-                        FormattedOffsetDateTime::now_utc()
+                        FormattedDateTime::now_utc()
                             - Duration::milliseconds(value.elapsed().as_millis() as i64)
                     })
-                    .unwrap_or_else(FormattedOffsetDateTime::now_utc),
+                    .unwrap_or_else(FormattedDateTime::now_utc),
             })
             .collect();
 
