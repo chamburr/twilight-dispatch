@@ -70,7 +70,11 @@ async fn real_main() -> ApiResult<()> {
     let mut conn = redis.get_async_connection().await?;
 
     let amqp = lapin::Connection::connect(
-        format!("amqp://{}:{}/%2f", config.rabbit_host, config.rabbit_port).as_str(),
+        format!(
+            "amqp://{}:{}@{}:{}/%2f",
+            config.rabbit_username, config.rabbit_password, config.rabbit_host, config.rabbit_port
+        )
+        .as_str(),
         lapin::ConnectionProperties::default(),
     )
     .await?;
@@ -102,7 +106,7 @@ async fn real_main() -> ApiResult<()> {
         config.bot_token.clone(),
         Intents::from_bits(config.intents).unwrap(),
     )
-    .gateway_url(Some(get_gateway_url()?))
+    .gateway_url(Some(get_gateway_url()))
     .shard_scheme(get_shard_scheme()?)
     .queue(get_queue().await?)
     .presence(get_update_status_info()?)
