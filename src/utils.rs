@@ -19,18 +19,8 @@ use twilight_model::gateway::payload::update_status::UpdateStatusInfo;
 use twilight_model::gateway::presence::Activity;
 use twilight_model::id::{ChannelId, GuildId};
 
-pub fn get_gateway_url() -> ApiResult<String> {
-    let config = get_config();
-    let version = config.api_version;
-
-    if version == 8 {
-        Ok("wss://gateway.discord.gg".to_owned())
-    } else {
-        Ok(format!(
-            "wss://gateway.discord.gg?v={}&compress=zlib-stream#",
-            version
-        ))
-    }
+pub fn get_gateway_url() -> String {
+    "wss://gateway.discord.gg".to_owned()
 }
 
 pub fn get_shard_scheme() -> ApiResult<ShardScheme> {
