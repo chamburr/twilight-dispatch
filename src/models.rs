@@ -3,8 +3,9 @@ use hyper::Error as HyperError;
 use lapin::Error as LapinError;
 use prometheus::Error as PrometheusError;
 use redis::RedisError;
+use serde::de::Error as SerdeDeError;
 use serde::export::Formatter;
-use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use simd_json::owned::Value;
 use simd_json::Error as SimdJsonError;
@@ -21,15 +22,15 @@ use twilight_gateway::shard::LargeThresholdError;
 use twilight_model::gateway::OpCode;
 
 #[derive(Debug, Clone)]
-pub struct FormattedOffsetDateTime(OffsetDateTime);
+pub struct FormattedDateTime(OffsetDateTime);
 
-impl FormattedOffsetDateTime {
+impl FormattedDateTime {
     pub fn now_utc() -> Self {
         Self(OffsetDateTime::now_utc())
     }
 }
 
-impl Sub<Duration> for FormattedOffsetDateTime {
+impl Sub<Duration> for FormattedDateTime {
     type Output = Self;
 
     fn sub(self, duration: Duration) -> Self::Output {
@@ -37,7 +38,7 @@ impl Sub<Duration> for FormattedOffsetDateTime {
     }
 }
 
-impl Serialize for FormattedOffsetDateTime {
+impl Serialize for FormattedDateTime {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -46,7 +47,7 @@ impl Serialize for FormattedOffsetDateTime {
     }
 }
 
-impl<'de> Deserialize<'de> for FormattedOffsetDateTime {
+impl<'de> Deserialize<'de> for FormattedDateTime {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -54,7 +55,7 @@ impl<'de> Deserialize<'de> for FormattedOffsetDateTime {
         let string = String::deserialize(deserializer)?;
         match OffsetDateTime::parse(string, "%FT%T.%N") {
             Ok(dt) => Ok(Self(dt)),
-            Err(_) => Err(DeError::custom("not a valid formatted timestamp")),
+            Err(_) => Err(SerdeDeError::custom("not a valid formatted timestamp")),
         }
     }
 
@@ -68,7 +69,7 @@ impl<'de> Deserialize<'de> for FormattedOffsetDateTime {
                 place.0 = dt;
                 Ok(())
             }
-            Err(_) => Err(DeError::custom("not a valid formatted timestamp")),
+            Err(_) => Err(SerdeDeError::custom("not a valid formatted timestamp")),
         }
     }
 }
@@ -85,7 +86,7 @@ pub struct StatusInfo {
     pub status: String,
     pub session: String,
     pub latency: u64,
-    pub last_ack: FormattedOffsetDateTime,
+    pub last_ack: FormattedDateTime,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
