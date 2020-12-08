@@ -1,7 +1,5 @@
 use crate::config::get_config;
-use crate::constants::{
-    queue_recv_key, EXCHANGE, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY,
-};
+use crate::constants::{EXCHANGE, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY, QUEUE_RECV};
 use crate::models::{ApiResult, FormattedDateTime, SessionInfo};
 use crate::utils::{get_clusters, get_queue, get_resume_sessions, get_shards};
 
@@ -75,7 +73,7 @@ async fn real_main() -> ApiResult<()> {
     channel
         .exchange_declare(
             EXCHANGE,
-            ExchangeKind::Direct,
+            ExchangeKind::Topic,
             ExchangeDeclareOptions {
                 passive: false,
                 durable: true,
@@ -100,32 +98,30 @@ async fn real_main() -> ApiResult<()> {
         )
         .await?;
 
-    if config.declare_queues {
-        for shard in config.shards_start..=config.shards_end {
-            channel
-                .queue_declare(
-                    queue_recv_key(shard).as_str(),
-                    QueueDeclareOptions {
-                        passive: false,
-                        durable: true,
-                        exclusive: false,
-                        auto_delete: false,
-                        nowait: false,
-                    },
-                    FieldTable::default(),
-                )
-                .await?;
+    if config.declare_queue {
+        channel
+            .queue_declare(
+                QUEUE_RECV,
+                QueueDeclareOptions {
+                    passive: false,
+                    durable: true,
+                    exclusive: false,
+                    auto_delete: false,
+                    nowait: false,
+                },
+                FieldTable::default(),
+            )
+            .await?;
 
-            channel
-                .queue_bind(
-                    queue_recv_key(shard).as_str(),
-                    EXCHANGE,
-                    shard.to_string().as_str(),
-                    QueueBindOptions::default(),
-                    FieldTable::default(),
-                )
-                .await?;
-        }
+        channel
+            .queue_bind(
+                QUEUE_RECV,
+                EXCHANGE,
+                "#",
+                QueueBindOptions::default(),
+                FieldTable::default(),
+            )
+            .await?;
     }
 
     let shards = get_shards();
