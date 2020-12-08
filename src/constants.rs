@@ -27,10 +27,6 @@ pub const CONNECT_COLOR: usize = 0x00FF00;
 pub const READY_COLOR: usize = 0x00FF00;
 pub const RESUME_COLOR: usize = 0x1E90FF;
 
-pub fn queue_recv_key(shard: u64) -> String {
-    format!("{}-{}", QUEUE_RECV, shard)
-}
-
 pub fn guild_key(guild: GuildId) -> String {
     format!("{}:{}", GUILD_KEY, guild)
 }

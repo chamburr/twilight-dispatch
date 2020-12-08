@@ -124,7 +124,7 @@ pub async fn outgoing(mut conn: redis::aio::Connection, cluster: Cluster, channe
                                     let result = channel
                                         .basic_publish(
                                             EXCHANGE,
-                                            shard_strings[shard as usize].as_str(),
+                                            kind,
                                             BasicPublishOptions::default(),
                                             payload,
                                             BasicProperties::default(),
@@ -163,7 +163,7 @@ pub async fn outgoing(mut conn: redis::aio::Connection, cluster: Cluster, channe
                             let result = channel
                                 .basic_publish(
                                     EXCHANGE,
-                                    shard_strings[shard as usize].as_str(),
+                                    kind,
                                     BasicPublishOptions::default(),
                                     data.bytes,
                                     BasicProperties::default(),
