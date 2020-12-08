@@ -83,9 +83,14 @@ pub async fn run_server() -> ApiResult<()> {
     Err(().into())
 }
 
-pub async fn run_jobs(cluster: &Cluster) {
+pub async fn run_jobs(clusters: &Vec<Cluster>) {
     loop {
-        GATEWAY_SHARDS.set(cluster.shards().len() as i64);
+        let mut shards = vec![];
+        for cluster in clusters {
+            shards.append(&mut cluster.shards())
+        }
+
+        GATEWAY_SHARDS.set(shards.len() as i64);
 
         let mut statuses = HashMap::new();
         statuses.insert(format!("{}", Stage::Connected), 0);
@@ -94,7 +99,7 @@ pub async fn run_jobs(cluster: &Cluster) {
         statuses.insert(format!("{}", Stage::Identifying), 0);
         statuses.insert(format!("{}", Stage::Resuming), 0);
 
-        for shard in cluster.shards() {
+        for shard in shards {
             if let Ok(info) = shard.info() {
                 GATEWAY_LATENCY
                     .with_label_values(&[info.id().to_string().as_str()])
