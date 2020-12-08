@@ -77,31 +77,37 @@ pub async fn del(conn: &mut redis::aio::Connection, key: impl ToString) -> ApiRe
     Ok(())
 }
 
-pub async fn run_jobs(conn: &mut redis::aio::Connection, cluster: &Cluster) {
+pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &Vec<Cluster>) {
     loop {
-        let mut statuses: Vec<StatusInfo> = cluster
-            .info()
-            .iter()
-            .map(|(k, v)| StatusInfo {
-                shard: *k,
-                status: format!("{}", v.stage()),
-                session: v.session_id().unwrap_or_default().to_string(),
-                latency: v
-                    .latency()
-                    .recent()
-                    .back()
-                    .map(|value| value.as_millis() as u64)
-                    .unwrap_or_default(),
-                last_ack: v
-                    .latency()
-                    .received()
-                    .map(|value| {
-                        FormattedDateTime::now_utc()
-                            - Duration::milliseconds(value.elapsed().as_millis() as i64)
-                    })
-                    .unwrap_or_else(FormattedDateTime::now_utc),
-            })
-            .collect();
+        let mut statuses = vec![];
+
+        for cluster in clusters {
+            let mut status: Vec<StatusInfo> = cluster
+                .info()
+                .iter()
+                .map(|(k, v)| StatusInfo {
+                    shard: *k,
+                    status: format!("{}", v.stage()),
+                    session: v.session_id().unwrap_or_default().to_string(),
+                    latency: v
+                        .latency()
+                        .recent()
+                        .back()
+                        .map(|value| value.as_millis() as u64)
+                        .unwrap_or_default(),
+                    last_ack: v
+                        .latency()
+                        .received()
+                        .map(|value| {
+                            FormattedDateTime::now_utc()
+                                - Duration::milliseconds(value.elapsed().as_millis() as i64)
+                        })
+                        .unwrap_or_else(FormattedDateTime::now_utc),
+                })
+                .collect();
+
+            statuses.append(&mut status);
+        }
 
         statuses.sort_by(|a, b| a.shard.cmp(&b.shard));
 
