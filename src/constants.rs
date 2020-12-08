@@ -1,6 +1,7 @@
 use twilight_model::id::{ChannelId, EmojiId, GuildId, MessageId, RoleId, UserId};
 
-pub const QUEUE_RECV: &str = "gateway";
+pub const EXCHANGE: &str = "gateway";
+pub const QUEUE_RECV: &str = "gateway.recv";
 pub const QUEUE_SEND: &str = "gateway.send";
 
 pub const SESSIONS_KEY: &str = "gateway_sessions";
@@ -25,6 +26,10 @@ pub const DISCONNECT_COLOR: usize = 0xFF0000;
 pub const CONNECT_COLOR: usize = 0x00FF00;
 pub const READY_COLOR: usize = 0x00FF00;
 pub const RESUME_COLOR: usize = 0x1E90FF;
+
+pub fn queue_recv_key(shard: u64) -> String {
+    format!("{}-{}", QUEUE_RECV, shard)
+}
 
 pub fn guild_key(guild: GuildId) -> String {
     format!("{}:{}", GUILD_KEY, guild)

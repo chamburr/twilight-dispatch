@@ -12,65 +12,89 @@ use tracing::warn;
 use twilight_gateway::cluster::ShardScheme;
 use twilight_gateway::queue::{LargeBotQueue, LocalQueue, Queue};
 use twilight_gateway::shard::ResumeSession;
-use twilight_gateway::Cluster;
+use twilight_gateway::{Cluster, EventTypeFlags, Intents};
 use twilight_http::Client;
 use twilight_model::channel::embed::Embed;
 use twilight_model::gateway::payload::update_status::UpdateStatusInfo;
 use twilight_model::gateway::presence::Activity;
 use twilight_model::id::{ChannelId, GuildId};
 
-pub fn get_gateway_url() -> String {
-    "wss://gateway.discord.gg".to_owned()
+pub async fn get_clusters(
+    resumes: HashMap<u64, ResumeSession>,
+    queue: Arc<Box<dyn Queue>>,
+) -> ApiResult<Vec<Cluster>> {
+    let config = get_config();
+
+    let shards = get_shards();
+    let base = shards / config.clusters;
+    let extra = shards % config.clusters;
+
+    let mut clusters = vec![];
+    let mut last_index = config.shards_start;
+
+    for i in 0..config.clusters {
+        let index = if i < extra {
+            last_index + base
+        } else {
+            last_index + base - 1
+        };
+
+        let cluster = Cluster::builder(
+            config.bot_token.clone(),
+            Intents::from_bits(config.intents).unwrap(),
+        )
+        .gateway_url(Some("wss://gateway.discord.gg".to_owned()))
+        .shard_scheme(ShardScheme::Range {
+            from: last_index,
+            to: index,
+            total: config.shards_total,
+        })
+        .queue(queue.clone())
+        .presence(UpdateStatusInfo::new(
+            vec![Activity {
+                application_id: None,
+                assets: None,
+                created_at: None,
+                details: None,
+                emoji: None,
+                flags: None,
+                id: None,
+                instance: None,
+                kind: config.activity_type,
+                name: config.activity_name.clone(),
+                party: None,
+                secrets: None,
+                state: None,
+                timestamps: None,
+                url: None,
+            }],
+            false,
+            None,
+            config.status,
+        ))
+        .large_threshold(config.large_threshold)?
+        .resume_sessions(resumes.clone())
+        .build()
+        .await?;
+
+        clusters.push(cluster);
+
+        last_index = index + 1;
+    }
+
+    Ok(clusters)
 }
 
-pub fn get_shard_scheme() -> ApiResult<ShardScheme> {
+pub async fn get_queue() -> Arc<Box<dyn Queue>> {
     let config = get_config();
-    Ok(ShardScheme::Range {
-        from: config.shards_start,
-        to: config.shards_end,
-        total: config.shards_total,
-    })
-}
 
-pub async fn get_queue() -> ApiResult<Arc<Box<dyn Queue>>> {
-    let config = get_config();
     let concurrency = config.shards_concurrency as usize;
-
     if concurrency == 1 {
-        Ok(Arc::new(Box::new(LocalQueue::new())))
+        Arc::new(Box::new(LocalQueue::new()))
     } else {
         let client = Client::new(config.bot_token);
-        Ok(Arc::new(Box::new(
-            LargeBotQueue::new(concurrency, &client).await,
-        )))
+        Arc::new(Box::new(LargeBotQueue::new(concurrency, &client).await))
     }
-}
-
-pub fn get_update_status_info() -> ApiResult<UpdateStatusInfo> {
-    let config = get_config();
-
-    Ok(UpdateStatusInfo::new(
-        vec![Activity {
-            application_id: None,
-            assets: None,
-            created_at: None,
-            details: None,
-            emoji: None,
-            flags: None,
-            id: None,
-            instance: None,
-            kind: config.activity_type,
-            name: config.activity_name,
-            party: None,
-            secrets: None,
-            state: None,
-            timestamps: None,
-            url: None,
-        }],
-        false,
-        None,
-        config.status,
-    ))
 }
 
 pub async fn get_resume_sessions(
@@ -100,6 +124,60 @@ pub async fn get_resume_sessions(
         .collect())
 }
 
+pub fn get_event_flags() -> EventTypeFlags {
+    let config = get_config();
+
+    let mut event_flags = EventTypeFlags::GATEWAY_HELLO
+        | EventTypeFlags::GATEWAY_INVALIDATE_SESSION
+        | EventTypeFlags::GATEWAY_RECONNECT
+        | EventTypeFlags::READY
+        | EventTypeFlags::RESUMED
+        | EventTypeFlags::SHARD_CONNECTED
+        | EventTypeFlags::SHARD_CONNECTING
+        | EventTypeFlags::SHARD_DISCONNECTED
+        | EventTypeFlags::SHARD_IDENTIFYING
+        | EventTypeFlags::SHARD_PAYLOAD
+        | EventTypeFlags::SHARD_RECONNECTING
+        | EventTypeFlags::SHARD_RESUMING;
+
+    if config.state_enabled {
+        event_flags |= EventTypeFlags::CHANNEL_CREATE
+            | EventTypeFlags::CHANNEL_DELETE
+            | EventTypeFlags::CHANNEL_PINS_UPDATE
+            | EventTypeFlags::CHANNEL_UPDATE
+            | EventTypeFlags::GUILD_CREATE
+            | EventTypeFlags::GUILD_DELETE
+            | EventTypeFlags::GUILD_EMOJIS_UPDATE
+            | EventTypeFlags::GUILD_UPDATE
+            | EventTypeFlags::ROLE_CREATE
+            | EventTypeFlags::ROLE_DELETE
+            | EventTypeFlags::ROLE_UPDATE
+            | EventTypeFlags::UNAVAILABLE_GUILD
+            | EventTypeFlags::USER_UPDATE
+            | EventTypeFlags::VOICE_STATE_UPDATE;
+
+        if config.state_member {
+            event_flags |= EventTypeFlags::MEMBER_ADD
+                | EventTypeFlags::MEMBER_REMOVE
+                | EventTypeFlags::MEMBER_CHUNK
+                | EventTypeFlags::MEMBER_UPDATE;
+
+            if config.state_presence {
+                event_flags |= EventTypeFlags::PRESENCE_UPDATE;
+            }
+        }
+
+        if config.state_message {
+            event_flags |= EventTypeFlags::MESSAGE_CREATE
+                | EventTypeFlags::MESSAGE_DELETE
+                | EventTypeFlags::MESSAGE_DELETE_BULK
+                | EventTypeFlags::MESSAGE_UPDATE;
+        }
+    }
+
+    event_flags
+}
+
 pub async fn log_discord(cluster: &Cluster, color: usize, message: impl Into<String>) {
     let config = get_config();
     let client = cluster.config().http_client();
@@ -127,6 +205,12 @@ pub async fn log_discord(cluster: &Cluster, color: usize, message: impl Into<Str
             warn!("Failed to post message to Discord: {:?}", err)
         }
     }
+}
+
+pub fn get_shards() -> u64 {
+    let config = get_config();
+
+    config.shards_end - config.shards_start + 1
 }
 
 pub fn get_guild_shard(guild_id: GuildId) -> u64 {
