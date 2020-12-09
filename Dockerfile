@@ -1,18 +1,18 @@
-FROM docker.io/library/alpine:edge AS builder
+FROM docker.io/library/alpine:latest AS builder
 
 RUN apk add --no-cache curl clang gcc musl-dev lld cmake make && \
     curl -sSf https://sh.rustup.rs | sh -s -- --profile minimal --default-toolchain nightly -y
 
 ENV CC clang
-ENV CFLAGS "-I/usr/lib/gcc/x86_64-alpine-linux-musl/10.2.1/ -L/usr/lib/gcc/x86_64-alpine-linux-musl/10.2.1/"
+ENV CFLAGS "-I/usr/lib/gcc/x86_64-alpine-linux-musl/9.3.0/ -L/usr/lib/gcc/x86_64-alpine-linux-musl/9.3.0/"
 ENV RUSTFLAGS "-C link-arg=-fuse-ld=lld -C target-cpu=native"
 
 RUN rm /usr/bin/ld && \
     rm /usr/bin/cc && \
     ln -s /usr/bin/lld /usr/bin/ld && \
     ln -s /usr/bin/clang /usr/bin/cc && \
-    ln -s /usr/lib/gcc/x86_64-alpine-linux-musl/10.2.1/crtbeginS.o /usr/lib/crtbeginS.o && \
-    ln -s /usr/lib/gcc/x86_64-alpine-linux-musl/10.2.1/crtendS.o /usr/lib/crtendS.o
+    ln -s /usr/lib/gcc/x86_64-alpine-linux-musl/9.3.0/crtbeginS.o /usr/lib/crtbeginS.o && \
+    ln -s /usr/lib/gcc/x86_64-alpine-linux-musl/9.3.0/crtendS.o /usr/lib/crtendS.o
 
 WORKDIR /build
 
@@ -33,7 +33,7 @@ RUN source $HOME/.cargo/env && \
     cargo build --release && \
     strip /build/target/release/twilight-dispatch
 
-FROM docker.io/library/alpine:edge
+FROM docker.io/library/alpine:latest
 
 RUN adduser -S twilight-dispatch
 
