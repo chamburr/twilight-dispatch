@@ -98,7 +98,7 @@ async fn real_main() -> ApiResult<()> {
         )
         .await?;
 
-    if config.declare_queue {
+    if config.default_queue {
         channel
             .queue_declare(
                 QUEUE_RECV,
