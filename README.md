@@ -125,7 +125,7 @@ docker build -t twilight-dispatch:latest .
 docker run -it --network host --env-file .env twilight-dispatch:latest
 ```
 
-The Docker image is also available here: https://hub.docker.com/u/chamburr/twilight-dispatch
+The Docker image is also available here: https://hub.docker.com/r/chamburr/twilight-dispatch
 
 Note: You do not need to install Rust if you are using Docker.
 
