@@ -496,6 +496,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             set(conn, guild_key(data.id), data).await?;
         }
         Event::UserUpdate(data) => {
+            old = get(conn, BOT_USER_KEY).await?;
             set(conn, BOT_USER_KEY, &data).await?;
         }
         Event::VoiceStateUpdate(data) => {
