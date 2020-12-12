@@ -84,7 +84,6 @@ pub struct SessionInfo {
 pub struct StatusInfo {
     pub shard: u64,
     pub status: String,
-    pub session: String,
     pub latency: u64,
     pub last_ack: FormattedDateTime,
 }
