@@ -31,16 +31,12 @@ pub fn guild_key(guild: GuildId) -> String {
     format!("{}:{}", GUILD_KEY, guild)
 }
 
-pub fn guild_match_key() -> String {
-    format!("{}:*", GUILD_KEY)
+pub fn guild_all_match_key(guild: GuildId) -> String {
+    format!("*:{}:*", guild)
 }
 
 pub fn channel_key(guild: GuildId, channel: ChannelId) -> String {
     format!("{}:{}:{}", CHANNEL_KEY, guild, channel)
-}
-
-pub fn channel_match_key(guild: GuildId) -> String {
-    format!("{}:{}:*", CHANNEL_KEY, guild)
 }
 
 pub fn private_channel_key(channel: ChannelId) -> String {
@@ -51,16 +47,8 @@ pub fn message_key(channel: ChannelId, message: MessageId) -> String {
     format!("{}:{}:{}", MESSAGE_KEY, channel, message)
 }
 
-pub fn message_match_key(channel: ChannelId) -> String {
-    format!("{}:{}:*", MESSAGE_KEY, channel)
-}
-
 pub fn role_key(guild: GuildId, role: RoleId) -> String {
     format!("{}:{}:{}", ROLE_KEY, guild, role)
-}
-
-pub fn role_match_key(guild: GuildId) -> String {
-    format!("{}:{}:*", ROLE_KEY, guild)
 }
 
 pub fn emoji_key(guild: GuildId, emoji: EmojiId) -> String {
@@ -75,22 +63,10 @@ pub fn member_key(guild: GuildId, member: UserId) -> String {
     format!("{}:{}:{}", MEMBER_KEY, guild, member)
 }
 
-pub fn member_match_key(guild: GuildId) -> String {
-    format!("{}:{}:*", MEMBER_KEY, guild)
-}
-
 pub fn presence_key(guild: GuildId, member: UserId) -> String {
     format!("{}:{}:{}", PRESENCE_KEY, guild, member)
 }
 
-pub fn presence_match_key(guild: GuildId) -> String {
-    format!("{}:{}:*", PRESENCE_KEY, guild)
-}
-
 pub fn voice_key(guild: GuildId, member: UserId) -> String {
     format!("{}:{}:{}", VOICE_KEY, guild, member)
-}
-
-pub fn voice_match_key(guild: GuildId) -> String {
-    format!("{}:{}:*", VOICE_KEY, guild)
 }

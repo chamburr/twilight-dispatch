@@ -83,7 +83,7 @@ pub async fn run_server() -> ApiResult<()> {
     Err(().into())
 }
 
-pub async fn run_jobs(clusters: &Vec<Cluster>) {
+pub async fn run_jobs(clusters: &[Cluster]) {
     loop {
         let mut shards = vec![];
         for cluster in clusters {
