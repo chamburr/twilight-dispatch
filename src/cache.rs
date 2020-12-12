@@ -3,9 +3,9 @@ use crate::constants::{
     channel_key, channel_match_key, emoji_key, emoji_match_key, guild_key, guild_match_key,
     member_key, member_match_key, message_key, message_match_key, presence_key, presence_match_key,
     private_channel_key, role_key, role_match_key, voice_key, voice_match_key, BOT_USER_KEY,
-    CACHE_DUMP_INTERVAL, STATUSES_KEY,
+    CACHE_DUMP_INTERVAL, SESSIONS_KEY, STATUSES_KEY,
 };
-use crate::models::{ApiResult, FormattedDateTime, StatusInfo};
+use crate::models::{ApiResult, FormattedDateTime, SessionInfo, StatusInfo};
 use crate::utils::get_guild_shard;
 use crate::{cache, utils};
 
@@ -80,6 +80,7 @@ pub async fn del(conn: &mut redis::aio::Connection, key: impl ToString) -> ApiRe
 pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &Vec<Cluster>) {
     loop {
         let mut statuses = vec![];
+        let mut sessions = HashMap::new();
 
         for cluster in clusters {
             let mut status: Vec<StatusInfo> = cluster
@@ -107,12 +108,26 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &Vec<Cluster>
                 .collect();
 
             statuses.append(&mut status);
+
+            for (shard, info) in cluster.info() {
+                sessions.insert(
+                    shard.to_string(),
+                    SessionInfo {
+                        session_id: info.session_id().unwrap_or_default().to_owned(),
+                        sequence: info.seq(),
+                    },
+                );
+            }
         }
 
         statuses.sort_by(|a, b| a.shard.cmp(&b.shard));
 
         if let Err(err) = cache::set(conn, STATUSES_KEY, &statuses).await {
             warn!("Failed to dump gateway statuses: {:?}", err);
+        }
+
+        if let Err(err) = cache::set(conn, SESSIONS_KEY, &sessions).await {
+            warn!("Failed to dump gateway sessions: {:?}", err);
         }
 
         time::delay_for(time::Duration::from_millis(CACHE_DUMP_INTERVAL as u64)).await;
