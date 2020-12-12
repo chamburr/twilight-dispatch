@@ -145,19 +145,18 @@ async fn real_main() -> ApiResult<()> {
     let clusters_clone = clusters.clone();
     tokio::spawn(async move {
         join!(
-            cache::run_jobs(&mut conn_clone, &clusters_clone),
-            metrics::run_jobs(&clusters_clone),
+            cache::run_jobs(&mut conn_clone, clusters_clone.as_slice()),
+            metrics::run_jobs(clusters_clone.as_slice()),
         )
     });
 
     for cluster in clusters.clone() {
-        let conn_clone = redis.get_async_connection().await?;
-
         let cluster_clone = cluster.clone();
         tokio::spawn(async move {
             cluster_clone.up().await;
         });
 
+        let conn_clone = redis.get_async_connection().await?;
         let cluster_clone = cluster.clone();
         let channel_clone = channel.clone();
         tokio::spawn(async move {

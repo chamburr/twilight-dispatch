@@ -1,10 +1,5 @@
 use crate::config::get_config;
-use crate::constants::{
-    channel_key, channel_match_key, emoji_key, emoji_match_key, guild_key, guild_match_key,
-    member_key, member_match_key, message_key, message_match_key, presence_key, presence_match_key,
-    private_channel_key, role_key, role_match_key, voice_key, voice_match_key, BOT_USER_KEY,
-    CACHE_DUMP_INTERVAL, SESSIONS_KEY, STATUSES_KEY,
-};
+use crate::constants::{channel_key, emoji_key, guild_key, member_key, message_key, presence_key, private_channel_key, role_key, voice_key, BOT_USER_KEY, CACHE_DUMP_INTERVAL, SESSIONS_KEY, STATUSES_KEY, guild_all_match_key, emoji_match_key};
 use crate::models::{ApiResult, FormattedDateTime, SessionInfo, StatusInfo};
 use crate::utils::get_guild_shard;
 use crate::{cache, utils};
@@ -22,13 +17,13 @@ use twilight_gateway::Cluster;
 use twilight_model::channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel};
 use twilight_model::gateway::event::Event;
 use twilight_model::guild::{Emoji, GuildStatus, Member};
-use twilight_model::id::{ChannelId, GuildId};
+use twilight_model::id::GuildId;
 
 pub async fn get<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl ToRedisArgs + std::marker::Send + Sync,
 ) -> ApiResult<Option<T>> {
-    let res: Option<String> = conn.get(key.to_string()).await?;
+    let res: Option<String> = conn.get(key).await?;
 
     Ok(res
         .map(|mut value| simd_json::from_str(value.as_mut_str()))
@@ -46,38 +41,38 @@ pub async fn scan(
 
 pub async fn set<T: Serialize>(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl ToRedisArgs + std::marker::Send + Sync,
     value: &T,
 ) -> ApiResult<()> {
     let value = simd_json::to_string(value)?;
-    conn.set(key.to_string(), value).await?;
+    conn.set(key, value).await?;
 
     Ok(())
 }
 
 pub async fn set_and_expire<T: Serialize>(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl ToRedisArgs + std::marker::Send + Sync + Clone,
     value: &T,
     expiry: u64,
 ) -> ApiResult<()> {
-    set(conn, key.to_string(), value).await?;
+    set(conn, key.clone(), value).await?;
 
     if expiry != 0 {
-        conn.expire(key.to_string(), (expiry / 1000) as usize)
+        conn.expire(key, (expiry / 1000) as usize)
             .await?;
     }
 
     Ok(())
 }
 
-pub async fn del(conn: &mut redis::aio::Connection, key: impl ToString) -> ApiResult<()> {
-    conn.del(key.to_string()).await?;
+pub async fn del(conn: &mut redis::aio::Connection, key: impl ToRedisArgs + std::marker::Send + Sync) -> ApiResult<()> {
+    conn.del(key).await?;
 
     Ok(())
 }
 
-pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &Vec<Cluster>) {
+pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
     loop {
         let mut statuses = vec![];
         let mut sessions = HashMap::new();
@@ -137,58 +132,15 @@ async fn clear_guild<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
     guild_id: GuildId,
 ) -> ApiResult<Option<T>> {
-    let config = get_config();
-
     let mut keys = vec![];
 
-    let mut channel_ids = vec![];
-
-    let mut matches = scan(conn, channel_match_key(guild_id)).await?;
-    while let Some(key) = matches.next_item().await {
-        keys.push(key.clone());
-        channel_ids.push(key.split(':').collect::<Vec<&str>>()[1].parse::<u64>()?)
-    }
-
-    if config.state_message {
-        for channel_id in channel_ids {
-            let mut matches = scan(conn, message_match_key(ChannelId(channel_id))).await?;
-            while let Some(key) = matches.next_item().await {
-                keys.push(key);
-            }
-        }
-    }
-
-    let mut matches = scan(conn, role_match_key(guild_id)).await?;
+    let mut matches = scan(conn, guild_all_match_key(guild_id)).await?;
     while let Some(key) = matches.next_item().await {
         keys.push(key);
     }
 
-    let mut matches = scan(conn, emoji_match_key(guild_id)).await?;
-    while let Some(key) = matches.next_item().await {
-        keys.push(key);
-    }
-
-    if config.state_member {
-        let mut matches = scan(conn, member_match_key(guild_id)).await?;
-        while let Some(key) = matches.next_item().await {
-            keys.push(key);
-        }
-    }
-
-    if config.state_presence {
-        let mut matches = scan(conn, presence_match_key(guild_id)).await?;
-        while let Some(key) = matches.next_item().await {
-            keys.push(key);
-        }
-    }
-
-    let mut matches = scan(conn, voice_match_key(guild_id)).await?;
-    while let Some(key) = matches.next_item().await {
-        keys.push(key);
-    }
-
-    for key in keys {
-        del(conn, key).await?;
+    if !keys.is_empty() {
+        del(conn, keys.as_slice()).await?;
     }
 
     let guild = get(conn, guild_key(guild_id)).await?;
@@ -288,7 +240,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         &member,
                         config.state_member_ttl,
                     )
-                    .await?;
+                        .await?;
                 }
             }
             if config.state_presence {
@@ -341,7 +293,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     &data,
                     config.state_member_ttl,
                 )
-                .await?;
+                    .await?;
             }
         }
         Event::MemberRemove(data) => {
@@ -370,7 +322,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         &member,
                         config.state_member_ttl,
                     )
-                    .await?;
+                        .await?;
                 }
             }
         }
@@ -383,7 +335,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         &member,
                         config.state_member_ttl,
                     )
-                    .await?;
+                        .await?;
                 }
             }
         }
@@ -395,7 +347,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     &data,
                     config.state_message_ttl,
                 )
-                .await?;
+                    .await?;
             }
         }
         Event::MessageDelete(data) => {
@@ -463,7 +415,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         &message,
                         config.state_message_ttl,
                     )
-                    .await?;
+                        .await?;
                 }
             }
         }
@@ -475,19 +427,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         }
         Event::Ready(data) => {
             set(conn, BOT_USER_KEY, &data.user).await?;
-            let mut keys = vec![];
-            let mut matches = scan(conn, guild_match_key()).await?;
-            while let Some(key) = matches.next_item().await {
-                keys.push(key);
-            }
-            for key in keys {
-                let guild_id = GuildId(key.split(':').collect::<Vec<&str>>()[1].parse::<u64>()?);
-                if let Some(shards) = data.shard {
-                    if get_guild_shard(guild_id) == shards[0] {
-                        let _: Option<Value> = clear_guild(conn, guild_id).await?;
-                    }
-                }
-            }
+            // TODO: clear up guilds
             for guild in data.guilds.values() {
                 if let GuildStatus::Offline(guild) = guild {
                     set(conn, guild_key(guild.id), guild).await?;
