@@ -1,10 +1,12 @@
 use crate::config::get_config;
-use crate::constants::{EXCHANGE, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY, QUEUE_RECV};
+use crate::constants::{EXCHANGE, QUEUE_RECV, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY};
 use crate::models::{ApiResult, FormattedDateTime, SessionInfo};
 use crate::utils::{get_clusters, get_queue, get_resume_sessions, get_shards};
 
 use dotenv::dotenv;
-use lapin::options::{BasicConsumeOptions, ExchangeDeclareOptions, QueueDeclareOptions, QueueBindOptions};
+use lapin::options::{
+    BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions,
+};
 use lapin::types::FieldTable;
 use lapin::ExchangeKind;
 use std::collections::HashMap;

@@ -1,6 +1,6 @@
 use crate::cache;
 use crate::config::get_config;
-use crate::constants::{CONNECT_COLOR, DISCONNECT_COLOR, READY_COLOR, RESUME_COLOR, EXCHANGE};
+use crate::constants::{CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, READY_COLOR, RESUME_COLOR};
 use crate::metrics::{GATEWAY_EVENTS, SHARD_EVENTS};
 use crate::models::{DeliveryInfo, DeliveryOpcode, PayloadData, PayloadInfo};
 use crate::utils::{get_event_flags, log_discord};
