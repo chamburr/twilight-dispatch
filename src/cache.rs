@@ -89,7 +89,6 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &Vec<Cluster>
                 .map(|(k, v)| StatusInfo {
                     shard: *k,
                     status: format!("{}", v.stage()),
-                    session: v.session_id().unwrap_or_default().to_string(),
                     latency: v
                         .latency()
                         .recent()
