@@ -1,16 +1,20 @@
 use crate::config::get_config;
-use crate::constants::{channel_key, emoji_key, guild_key, member_key, message_key, presence_key, private_channel_key, role_key, voice_key, BOT_USER_KEY, CACHE_DUMP_INTERVAL, SESSIONS_KEY, STATUSES_KEY, guild_all_match_key, emoji_match_key};
+use crate::constants::{
+    channel_key, emoji_key, guild_key, member_key, message_key, presence_key, private_channel_key,
+    role_key, voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL, CACHE_DUMP_INTERVAL, CHANNEL_KEY,
+    EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX, MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
+};
 use crate::models::{ApiResult, FormattedDateTime, SessionInfo, StatusInfo};
-use crate::utils::get_guild_shard;
-use crate::{cache, utils};
+use crate::utils::{get_guild_shard, get_keys, to_value};
 
 use ::time::Duration;
-use redis::{AsyncCommands, AsyncIter, ToRedisArgs};
+use redis::{AsyncCommands, FromRedisValue};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_mappable_seq::Key;
 use simd_json::owned::Value;
 use std::collections::HashMap;
+use std::hash::Hash;
 use tokio::time;
 use tracing::warn;
 use twilight_gateway::Cluster;
@@ -21,55 +25,150 @@ use twilight_model::id::GuildId;
 
 pub async fn get<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
-    key: impl ToRedisArgs + std::marker::Send + Sync,
+    key: impl ToString,
 ) -> ApiResult<Option<T>> {
-    let res: Option<String> = conn.get(key).await?;
+    let res: Option<String> = conn.get(key.to_string()).await?;
 
     Ok(res
         .map(|mut value| simd_json::from_str(value.as_mut_str()))
         .transpose()?)
 }
 
-pub async fn scan(
+pub async fn get_members<T: FromRedisValue>(
     conn: &mut redis::aio::Connection,
-    pattern: impl ToString + ToRedisArgs,
-) -> ApiResult<AsyncIter<'_, String>> {
-    let res: AsyncIter<String> = conn.scan_match(pattern).await?;
+    key: impl ToString,
+) -> ApiResult<Vec<T>> {
+    let res = conn.smembers(key.to_string()).await?;
+
+    Ok(res)
+}
+
+pub async fn get_hashmap<T: FromRedisValue + Eq + Hash, U: FromRedisValue>(
+    conn: &mut redis::aio::Connection,
+    key: impl ToString,
+) -> ApiResult<HashMap<T, U>> {
+    let res = conn.hgetall(key.to_string()).await?;
 
     Ok(res)
 }
 
 pub async fn set<T: Serialize>(
     conn: &mut redis::aio::Connection,
-    key: impl ToRedisArgs + std::marker::Send + Sync,
+    key: impl ToString,
     value: &T,
 ) -> ApiResult<()> {
     let value = simd_json::to_string(value)?;
-    conn.set(key, value).await?;
+    conn.set(key.to_string(), value).await?;
+
+    let parts = get_keys(key.to_string());
+
+    if parts.len() > 1 {
+        let _: () = conn
+            .sadd(format!("{}{}", parts[0], KEYS_SUFFIX), key.to_string())
+            .await?;
+    }
+
+    if parts.len() > 2 {
+        if parts[0] != MESSAGE_KEY {
+            let _: () = conn
+                .sadd(
+                    format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]),
+                    key.to_string(),
+                )
+                .await?;
+        } else {
+            let _: () = conn
+                .sadd(
+                    format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]),
+                    key.to_string(),
+                )
+                .await?;
+        }
+    }
 
     Ok(())
 }
 
 pub async fn set_and_expire<T: Serialize>(
     conn: &mut redis::aio::Connection,
-    key: impl ToRedisArgs + std::marker::Send + Sync + Clone,
+    key: impl ToString,
     value: &T,
     expiry: u64,
 ) -> ApiResult<()> {
-    set(conn, key.clone(), value).await?;
+    set(conn, key.to_string(), value).await?;
 
     if expiry != 0 {
-        conn.expire(key, (expiry / 1000) as usize)
-            .await?;
+        let timestamp = FormattedDateTime::now() + Duration::milliseconds(expiry as i64);
+        conn.hset(
+            EXPIRY_KEYS,
+            key.to_string(),
+            simd_json::to_string(&timestamp)?,
+        )
+        .await?;
     }
 
     Ok(())
 }
 
-pub async fn del(conn: &mut redis::aio::Connection, key: impl ToRedisArgs + std::marker::Send + Sync) -> ApiResult<()> {
-    conn.del(key).await?;
+pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiResult<()> {
+    if keys.is_empty() {
+        return Ok(());
+    }
+
+    conn.del(keys.clone()).await?;
+
+    let mut all_keys = HashMap::new();
+
+    for key in keys {
+        let parts = get_keys(key.to_owned());
+
+        if parts.len() > 1 {
+            all_keys
+                .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
+                .or_insert(vec![])
+                .push(key);
+        }
+
+        if parts.len() > 2 {
+            if parts[0] != MESSAGE_KEY {
+                all_keys
+                    .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
+                    .or_insert(vec![])
+                    .push(key);
+            } else {
+                all_keys
+                    .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
+                    .or_insert(vec![])
+                    .push(key);
+            }
+        }
+    }
+
+    for (key, value) in all_keys {
+        conn.srem(key, value).await?;
+    }
 
     Ok(())
+}
+
+pub async fn del<T: ToString>(conn: &mut redis::aio::Connection, key: T) -> ApiResult<()> {
+    del_all(conn, &[key.to_string()]).await?;
+
+    Ok(())
+}
+
+pub async fn del_hashmap(
+    conn: &mut redis::aio::Connection,
+    key: impl ToString,
+    fields: &[String],
+) -> ApiResult<()> {
+    if fields.is_empty() {
+        return Ok(());
+    }
+
+    let res = conn.hdel(key.to_string(), fields).await?;
+
+    Ok(res)
 }
 
 pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
@@ -94,10 +193,10 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
                         .latency()
                         .received()
                         .map(|value| {
-                            FormattedDateTime::now_utc()
+                            FormattedDateTime::now()
                                 - Duration::milliseconds(value.elapsed().as_millis() as i64)
                         })
-                        .unwrap_or_else(FormattedDateTime::now_utc),
+                        .unwrap_or_else(FormattedDateTime::now),
                 })
                 .collect();
 
@@ -116,11 +215,11 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
 
         statuses.sort_by(|a, b| a.shard.cmp(&b.shard));
 
-        if let Err(err) = cache::set(conn, STATUSES_KEY, &statuses).await {
+        if let Err(err) = set(conn, STATUSES_KEY, &statuses).await {
             warn!("Failed to dump gateway statuses: {:?}", err);
         }
 
-        if let Err(err) = cache::set(conn, SESSIONS_KEY, &sessions).await {
+        if let Err(err) = set(conn, SESSIONS_KEY, &sessions).await {
             warn!("Failed to dump gateway sessions: {:?}", err);
         }
 
@@ -128,20 +227,52 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
     }
 }
 
+pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
+    loop {
+        let hashmap: ApiResult<HashMap<String, String>> = get_hashmap(conn, EXPIRY_KEYS).await;
+
+        match hashmap {
+            Ok(hashmap) => {
+                let mut keys = vec![];
+
+                for (key, mut value) in hashmap {
+                    match simd_json::from_str::<FormattedDateTime>(value.as_mut_str()) {
+                        Ok(timestamp) => {
+                            if (timestamp - FormattedDateTime::now()).is_negative() {
+                                keys.push(key);
+                            }
+                        }
+                        Err(err) => {
+                            warn!("Failed to get expiry timestamp: {:?}", err);
+                        }
+                    }
+                }
+
+                if let Err(err) = del_all(conn, keys.as_slice()).await {
+                    warn!("Failed to delete expired keys: {:?}", err);
+                } else {
+                    if let Err(err) = del_hashmap(conn, EXPIRY_KEYS, keys.as_slice()).await {
+                        warn!("Failed to delete expired keys hashmap: {:?}", err);
+                    }
+                }
+            }
+            Err(err) => {
+                warn!("Failed to get expiry keys: {:?}", err);
+            }
+        }
+
+        time::delay_for(time::Duration::from_millis(CACHE_CLEANUP_INTERVAL as u64)).await;
+    }
+}
+
 async fn clear_guild<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
     guild_id: GuildId,
 ) -> ApiResult<Option<T>> {
-    let mut keys = vec![];
+    let members: Vec<String> =
+        get_members(conn, format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, guild_id)).await?;
 
-    let mut matches = scan(conn, guild_all_match_key(guild_id)).await?;
-    while let Some(key) = matches.next_item().await {
-        keys.push(key);
-    }
-
-    if !keys.is_empty() {
-        del(conn, keys.as_slice()).await?;
-    }
+    del_all(conn, members.as_slice()).await?;
 
     let guild = get(conn, guild_key(guild_id)).await?;
     del(conn, guild_key(guild_id)).await?;
@@ -240,7 +371,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         &member,
                         config.state_member_ttl,
                     )
-                        .await?;
+                    .await?;
                 }
             }
             if config.state_presence {
@@ -262,21 +393,23 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         }
         Event::GuildEmojisUpdate(data) => {
             let mut emojis = vec![];
-            let mut keys = vec![];
-            let mut matches = scan(conn, emoji_match_key(data.guild_id)).await?;
-            while let Some(key) = matches.next_item().await {
-                keys.push(key)
-            }
+            let keys: Vec<String> = get_members(
+                conn,
+                format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, data.guild_id),
+            )
+            .await?;
             for key in keys {
-                let emoji: Option<Emoji> = get(conn, key.as_str()).await?;
-                if let Some(emoji) = emoji {
-                    emojis.push(emoji.clone());
-                    if data.emojis.get(&emoji.id).is_none() {
-                        del(conn, key).await?;
+                if get_keys(key.clone())[0] == EMOJI_KEY {
+                    let emoji: Option<Emoji> = get(conn, key.as_str()).await?;
+                    if let Some(emoji) = emoji {
+                        emojis.push(emoji.clone());
+                        if data.emojis.get(&emoji.id).is_none() {
+                            del(conn, key).await?;
+                        }
                     }
                 }
             }
-            old = Some(utils::to_value(&emojis)?);
+            old = Some(to_value(&emojis)?);
             for emoji in data.emojis.values() {
                 set(conn, emoji_key(data.guild_id, emoji.id), emoji).await?
             }
@@ -293,7 +426,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     &data,
                     config.state_member_ttl,
                 )
-                    .await?;
+                .await?;
             }
         }
         Event::MemberRemove(data) => {
@@ -310,7 +443,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 let member: Option<Member> =
                     get(conn, member_key(data.guild_id, data.user.id)).await?;
                 if let Some(mut member) = member {
-                    old = Some(utils::to_value(&member)?);
+                    old = Some(to_value(&member)?);
                     member.joined_at = Some(data.joined_at.clone());
                     member.nick = data.nick.clone();
                     member.premium_since = data.premium_since.clone();
@@ -322,7 +455,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         &member,
                         config.state_member_ttl,
                     )
-                        .await?;
+                    .await?;
                 }
             }
         }
@@ -335,7 +468,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         &member,
                         config.state_member_ttl,
                     )
-                        .await?;
+                    .await?;
                 }
             }
         }
@@ -347,7 +480,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     &data,
                     config.state_message_ttl,
                 )
-                    .await?;
+                .await?;
             }
         }
         Event::MessageDelete(data) => {
@@ -367,7 +500,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         del(conn, message_key(data.channel_id, *id)).await?;
                     }
                 }
-                old = Some(utils::to_value(&messages)?);
+                old = Some(to_value(&messages)?);
             }
         }
         Event::MessageUpdate(data) => {
@@ -375,7 +508,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 let message: Option<Message> =
                     get(conn, message_key(data.channel_id, data.id)).await?;
                 if let Some(mut message) = message {
-                    old = Some(utils::to_value(&message)?);
+                    old = Some(to_value(&message)?);
                     if let Some(attachments) = &data.attachments {
                         message.attachments = attachments.clone();
                     }
@@ -415,7 +548,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         &message,
                         config.state_message_ttl,
                     )
-                        .await?;
+                    .await?;
                 }
             }
         }
@@ -427,7 +560,14 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         }
         Event::Ready(data) => {
             set(conn, BOT_USER_KEY, &data.user).await?;
-            // TODO: clear up guilds
+            if let Some(shards) = data.shard {
+                for guild in get_members(conn, format!("{}{}", GUILD_KEY, KEYS_SUFFIX)).await? {
+                    let id = GuildId(get_keys(guild)[1].parse()?);
+                    if get_guild_shard(id) == shards[0] && data.guilds.get(&id).is_none() {
+                        let _: Option<Value> = clear_guild(conn, id).await?;
+                    }
+                }
+            }
             for guild in data.guilds.values() {
                 if let GuildStatus::Offline(guild) = guild {
                     set(conn, guild_key(guild.id), guild).await?;

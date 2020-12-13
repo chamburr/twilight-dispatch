@@ -226,3 +226,7 @@ where
 
     Ok(result)
 }
+
+pub fn get_keys(value: String) -> Vec<String> {
+    return value.split(':').map(|part| part.to_owned()).collect();
+}

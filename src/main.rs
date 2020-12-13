@@ -134,7 +134,7 @@ async fn real_main() -> ApiResult<()> {
     info!("Starting up {} shards", shards);
     info!("Resuming {} sessions", resumes.len());
 
-    cache::set(&mut conn, STARTED_KEY, &FormattedDateTime::now_utc()).await?;
+    cache::set(&mut conn, STARTED_KEY, &FormattedDateTime::now()).await?;
     cache::set(&mut conn, SHARDS_KEY, &shards).await?;
 
     tokio::spawn(async {
@@ -142,10 +142,12 @@ async fn real_main() -> ApiResult<()> {
     });
 
     let mut conn_clone = redis.get_async_connection().await?;
+    let mut conn_clone_two = redis.get_async_connection().await?;
     let clusters_clone = clusters.clone();
     tokio::spawn(async move {
         join!(
             cache::run_jobs(&mut conn_clone, clusters_clone.as_slice()),
+            cache::run_cleanups(&mut conn_clone_two),
             metrics::run_jobs(clusters_clone.as_slice()),
         )
     });

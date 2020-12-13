@@ -15,7 +15,7 @@ use std::fmt::{self, Display};
 use std::io::Error as IoError;
 use std::net::AddrParseError;
 use std::num::ParseIntError;
-use std::ops::Sub;
+use std::ops::{Add, Sub};
 use time::{Duration, OffsetDateTime};
 use twilight_gateway::cluster::ClusterStartError;
 use twilight_gateway::shard::LargeThresholdError;
@@ -25,7 +25,7 @@ use twilight_model::gateway::OpCode;
 pub struct FormattedDateTime(OffsetDateTime);
 
 impl FormattedDateTime {
-    pub fn now_utc() -> Self {
+    pub fn now() -> Self {
         Self(OffsetDateTime::now_utc())
     }
 }
@@ -33,8 +33,24 @@ impl FormattedDateTime {
 impl Sub<Duration> for FormattedDateTime {
     type Output = Self;
 
-    fn sub(self, duration: Duration) -> Self::Output {
-        Self(self.0.sub(duration))
+    fn sub(self, rhs: Duration) -> Self::Output {
+        Self(self.0.sub(rhs))
+    }
+}
+
+impl Sub<FormattedDateTime> for FormattedDateTime {
+    type Output = Duration;
+
+    fn sub(self, rhs: FormattedDateTime) -> Self::Output {
+        self.0.sub(rhs.0)
+    }
+}
+
+impl Add<Duration> for FormattedDateTime {
+    type Output = Self;
+
+    fn add(self, rhs: Duration) -> Self::Output {
+        Self(self.0.add(rhs))
     }
 }
 
@@ -53,7 +69,7 @@ impl<'de> Deserialize<'de> for FormattedDateTime {
         D: Deserializer<'de>,
     {
         let string = String::deserialize(deserializer)?;
-        match OffsetDateTime::parse(string, "%FT%T.%N") {
+        match OffsetDateTime::parse(string + "+0000", "%FT%T.%N%z") {
             Ok(dt) => Ok(Self(dt)),
             Err(_) => Err(SerdeDeError::custom("not a valid formatted timestamp")),
         }
@@ -64,7 +80,7 @@ impl<'de> Deserialize<'de> for FormattedDateTime {
         D: Deserializer<'de>,
     {
         let string = String::deserialize(deserializer)?;
-        match OffsetDateTime::parse(string, "%FT%T.%N") {
+        match OffsetDateTime::parse(string + "+0000", "%FT%T.%N%z") {
             Ok(dt) => {
                 place.0 = dt;
                 Ok(())

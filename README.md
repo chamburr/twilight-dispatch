@@ -37,7 +37,7 @@ there is a `gateway.recv` channel bound to all messages from the exchange. The d
 decompressed dispatch events from the gateway will be available in the queue.
 
 To send events to the gateway, connect to the channel `gateway.send`, then publish a message like
-the following. Note that the outer most `op` is not the Discord gateway OP code. The only option for
+the following. Note that the outermost `op` is not the Discord gateway OP code. The only option for
 now is 0, but there may be others in the future to reconnect to a shard, etc.
 
 ```json
@@ -60,7 +60,7 @@ now is 0, but there may be others in the future to reconnect to a shard, etc.
 
 State caching with Redis is supported out of the box.
 
-The objects available are in the table below. All values are stored in the plain text form and you
+The objects available are in the table below. All values are stored in the plain text form, and you
 will need to properly deserialize them before using. Some objects such as presence and member could
 be missing if you disable them in the configurations.
 
@@ -68,29 +68,44 @@ Furthermore, when state caching is enabled, there will be an additional field fo
 the message queue, `old`, containing the previous state (only if it exists). This could be useful
 for the `MESSAGE_DELETE` event and such.
 
-| Key                           | Description                      |
-| ----------------------------- | -------------------------------- |
-| bot_user                      | Bot user object.                 |
-| guild:guild_id                | Guild object.                    |
-| channel:channel_id            | Private channel object.          |
-| channel:guild_id:channel_id   | Guild channel object.            |
-| message:channel_id:message_id | Channel message object.          |
-| role:guild_id:role_id         | Guild role object.               |
-| emoji:guild_id:emoji_id       | Guild emoji object.              |
-| member:guild_id:user_id       | Guild member object.             |
-| presence:guild_id:user_id     | Guild member presence object.    |
-| voice:guild_id:user_id        | Guild member voice state object. |
+| Key                             | Description                      |
+| ------------------------------- | -------------------------------- |
+| `bot_user`                      | Bot user object.                 |
+| `guild:guild_id`                | Guild object.                    |
+| `channel:guild_id:channel_id`   | Guild channel object.            |
+| `role:guild_id:role_id`         | Guild role object.               |
+| `emoji:guild_id:emoji_id`       | Guild emoji object.              |
+| `member:guild_id:user_id`       | Guild member object.             |
+| `presence:guild_id:user_id`     | Guild member presence object.    |
+| `voice:guild_id:user_id`        | Guild member voice state object. |
+| `channel:channel_id`            | Private channel object.          |
+| `message:channel_id:message_id` | Channel message object.          |
+
+There are additionally some helper keys for state cache below, stored as sets.
+
+| Key                       | Description                            |
+| ------------------------- | -------------------------------------- |
+| `guild_keys`              | List of guild keys.                    |
+| `guild_keys:guild_id`     | List of keys related to a guild.       |
+| `channel_keys`            | List of guild channel keys.            |
+| `role_keys`               | List of guild role keys.               |
+| `emoji_keys`              | List of guild emoji keys.              |
+| `member_keys`             | List of guild member keys.             |
+| `presence_keys`           | List of guild member presence keys.    |
+| `voice_keys`              | List of guild member voice state keys. |
+| `channel_keys:channel_id` | List of keys related to a channel.     |
+| `message_keys`            | List of channel message keys.          |
 
 ### Information
 
 Information related to the gateway are stored in Redis.
 
-| Key              | Description                         |
-| ---------------- | ----------------------------------- |
-| gateway_sessions | Array of shard session information. |
-| gateway_statuses | Array of shard status information.  |
-| gateway_started  | Timestamp when the service started. |
-| gateway_shards   | Total number of shards being ran.   |
+| Key                | Description                         |
+| ------------------ | ----------------------------------- |
+| `gateway_sessions` | Array of shard session information. |
+| `gateway_statuses` | Array of shard status information.  |
+| `gateway_started`  | Timestamp when the service started. |
+| `gateway_shards`   | Total number of shards being ran.   |
 
 ## Installing
 
