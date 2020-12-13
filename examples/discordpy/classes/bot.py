@@ -1,20 +1,19 @@
-import asyncio
 import aio_pika
-import redis
-
+import asyncio
 import config
 import inspect
 import json
 import logging
+import redis
 import sys
 import traceback
 
-from classes.state import State
 from classes.misc import Status, Session
-from discord.gateway import DiscordWebSocket
+from classes.state import State
 from discord.ext import commands
 from discord.ext.commands import DefaultHelpCommand
 from discord.ext.commands.core import _CaseInsensitiveDict
+from discord.gateway import DiscordWebSocket
 from discord.http import HTTPClient
 from discord.utils import parse_time, to_json
 
@@ -32,11 +31,12 @@ class Bot(commands.AutoShardedBot):
         self._before_invoke = None
         self._after_invoke = None
         self._help_command = None
-        self.description = inspect.cleandoc(description) if description else ''
-        self.owner_id = kwargs.get('owner_id')
-        self.owner_ids = kwargs.get('owner_ids', set())
+        self.description = inspect.cleandoc(description) if description else ""
+        self.owner_id = kwargs.get("owner_id")
+        self.owner_ids = kwargs.get("owner_ids", set())
+        self._skip_check = lambda x, y: x != y
         self.help_command = help_command
-        self.case_insensitive = kwargs.get('case_insensitive', False)
+        self.case_insensitive = kwargs.get("case_insensitive", False)
         self.all_commands = _CaseInsensitiveDict() if self.case_insensitive else {}
 
         self.ws = None
@@ -83,6 +83,7 @@ class Bot(commands.AutoShardedBot):
             dispatch=self.dispatch,
             handlers=self._handlers,
             hooks=self._hooks,
+            http=self.http,
             loop=self.loop,
             redis=self._redis,
             shard_count=self.shard_count,
@@ -142,6 +143,8 @@ class Bot(commands.AutoShardedBot):
         await self._amqp_channel.default_exchange.publish(aio_pika.Message(body=data), routing_key="gateway.send")
 
     async def start(self):
+        log.info("Starting...")
+
         self._redis = redis.Redis.from_url(self.config.redis_url, decode_responses=True)
         self._amqp = await aio_pika.connect_robust(self.config.amqp_url)
         self._amqp_channel = await self._amqp.channel()

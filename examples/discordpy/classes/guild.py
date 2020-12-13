@@ -1,9 +1,9 @@
 import logging
 
 from discord import guild, utils
+from discord.channel import _channel_factory
 from discord.enums import *
 from discord.enums import try_enum
-from discord.channel import _channel_factory
 from discord.member import Member, VoiceState
 from discord.role import Role
 
@@ -73,7 +73,7 @@ class Guild(guild.Guild):
     @property
     def _channels(self):
         channels = []
-        for channel in self._state._scan_and_get(f"channel:{self.id}:*"):
+        for channel in self._state._members_get_all("guild", key_id=self.id, name="channel"):
             factory, _ = _channel_factory(channel["type"])
             channels.append(factory(guild=self, state=self._state, data=channel))
         return channels
@@ -81,35 +81,38 @@ class Guild(guild.Guild):
     @property
     def _members(self):
         members = []
-        for member in self._state._scan_and_get(f"member:{self.id}:*"):
+        for member in self._state._members_get_all("guild", key_id=self.id, name="member"):
             members.append(Member(guild=self, state=self._state, data=member))
         return members
 
     @property
     def _roles(self):
         roles = []
-        for role in self._state._scan_and_get(f"role:{self.id}:*"):
+        for role in self._state._members_get_all("guild", key_id=self.id, name="role"):
             roles.append(Role(guild=self, state=self._state, data=role))
         return roles
 
     @property
     def _voice_states(self):
         voices = []
-        for voice in self._state._scan_and_get(f"voice:{self.id}:*"):
+        for voice in self._state._members_get_all("guild", key_id=self.id, name="voice"):
             if voice["channel_id"]:
-                voices.append(VoiceState(channel=self.get_channel(int(voice["channel_id"])), data=voice))
+                channel = self.get_channel(int(voice["channel_id"]))
+                if channel:
+                    voices.append(VoiceState(channel=channel, data=voice))
             else:
                 voices.append(VoiceState(channel=None, data=voice))
         return voices
 
     def _voice_state_for(self, user_id):
         result = self._state._get(f"voice:{self.id}:{user_id}")
-        if not result:
-            return None
-        if result["channel_id"]:
-            return VoiceState(channel=self.get_channel(int(result["channel_id"])), data=result)
-        else:
-            return VoiceState(channel=None, data=result)
+        if result and result["channel_id"]:
+            channel = self.get_channel(int(result["channel_id"]))
+            if channel:
+                result = VoiceState(channel=channel, data=result)
+        elif result:
+            result = VoiceState(channel=None, data=result)
+        return result
 
     @property
     def channels(self):
@@ -143,9 +146,9 @@ class Guild(guild.Guild):
 
     def get_member(self, user_id):
         result = self._state._get(f"member:{self.id}:{user_id}")
-        if not result:
-            return None
-        return Member(guild=self, state=self._state, data=result)
+        if result:
+            result = Member(guild=self, state=self._state, data=result)
+        return result
 
     @property
     def roles(self):
@@ -153,6 +156,6 @@ class Guild(guild.Guild):
 
     def get_role(self, role_id):
         result = self._state._get(f"role:{self.id}:{role_id}")
-        if not result:
-            return None
-        return Role(guild=self, state=self._state, data=result)
+        if result:
+            Role(guild=self, state=self._state, data=result)
+        return result
