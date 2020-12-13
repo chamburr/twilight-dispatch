@@ -19,7 +19,11 @@ pub const MEMBER_KEY: &str = "member";
 pub const PRESENCE_KEY: &str = "presence";
 pub const VOICE_KEY: &str = "voice";
 
+pub const KEYS_SUFFIX: &str = "_keys";
+pub const EXPIRY_KEYS: &str = "expiry_keys";
+
 pub const CACHE_DUMP_INTERVAL: usize = 1000;
+pub const CACHE_CLEANUP_INTERVAL: usize = 100;
 pub const METRICS_DUMP_INTERVAL: usize = 1000;
 
 pub const DISCONNECT_COLOR: usize = 0xFF0000;
@@ -29,10 +33,6 @@ pub const RESUME_COLOR: usize = 0x1E90FF;
 
 pub fn guild_key(guild: GuildId) -> String {
     format!("{}:{}", GUILD_KEY, guild)
-}
-
-pub fn guild_all_match_key(guild: GuildId) -> String {
-    format!("*:{}:*", guild)
 }
 
 pub fn channel_key(guild: GuildId, channel: ChannelId) -> String {
@@ -53,10 +53,6 @@ pub fn role_key(guild: GuildId, role: RoleId) -> String {
 
 pub fn emoji_key(guild: GuildId, emoji: EmojiId) -> String {
     format!("{}:{}:{}", EMOJI_KEY, guild, emoji)
-}
-
-pub fn emoji_match_key(guild: GuildId) -> String {
-    format!("{}:{}:*", EMOJI_KEY, guild)
 }
 
 pub fn member_key(guild: GuildId, member: UserId) -> String {
