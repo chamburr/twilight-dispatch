@@ -5,9 +5,9 @@ use crate::metrics::{GATEWAY_EVENTS, SHARD_EVENTS};
 use crate::models::{DeliveryInfo, DeliveryOpcode, PayloadData, PayloadInfo};
 use crate::utils::{get_event_flags, log_discord};
 
-use futures::StreamExt;
 use lapin::options::{BasicAckOptions, BasicPublishOptions};
 use lapin::{BasicProperties, Consumer};
+use tokio::stream::StreamExt;
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
