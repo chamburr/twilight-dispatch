@@ -1,0 +1,23 @@
+name: Build docker image
+on: [push]
+
+jobs:
+    build:
+        name: Create docker image
+        runs-on: ubuntu-20.04
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v2.2.0
+            - name: Login to registries
+              shell: bash
+              run: |
+                  echo "${{ secrets.DOCKERHUB_PASS }}" | docker login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin docker.io
+            - name: Build the tagged Docker image
+              shell: bash
+              run: |
+                  docker build --file Dockerfile \
+                    --tag "docker.io/chamburr/twilight-dispatch:latest"
+            - name: Push the tagged Docker image
+              shell: bash
+              run: |
+                  docker push "docker.io/chamburr/twilight-dispatch:latest"
