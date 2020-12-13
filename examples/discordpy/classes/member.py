@@ -2,8 +2,8 @@ import logging
 import sys
 
 from discord import member
-from discord.utils import parse_time
 from discord.activity import create_activity
+from discord.utils import parse_time
 
 log = logging.getLogger(__name__)
 

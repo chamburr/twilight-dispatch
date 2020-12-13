@@ -1,7 +1,6 @@
 import asyncio
-import logging
-
 import config
+import logging
 
 from classes.bot import Bot
 
