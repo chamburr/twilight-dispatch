@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 dotenv = "0.15"
-futures = { version = "0.3", default-features = false }
 hyper = { version = "0.13", default-features = false }
 lapin = { version = "1.6", default-features = false }
 lazy_static = "1.4"
