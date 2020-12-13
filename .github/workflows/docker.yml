@@ -16,7 +16,7 @@ jobs:
               shell: bash
               run: |
                   docker build --file Dockerfile \
-                    --tag "docker.io/chamburr/twilight-dispatch:latest"
+                    --tag "docker.io/chamburr/twilight-dispatch:latest" .
             - name: Push the tagged Docker image
               shell: bash
               run: |
