@@ -1,4 +1,4 @@
-use crate::config::get_config;
+use crate::config::CONFIG;
 use crate::constants::{EXCHANGE, QUEUE_RECV, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY};
 use crate::models::{ApiResult, FormattedDateTime, SessionInfo};
 use crate::utils::{get_clusters, get_queue, get_resume_sessions, get_shards};
@@ -27,9 +27,8 @@ mod utils;
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    config::init();
 
-    if get_config().rust_log.to_lowercase() == "info" {
+    if CONFIG.rust_log.to_lowercase() == "info" {
         tracing_subscriber::registry()
             .with(tracing_subscriber::fmt::layer())
             .with(
@@ -50,11 +49,9 @@ async fn main() {
 }
 
 async fn real_main() -> ApiResult<()> {
-    let config = get_config();
-
     let redis = redis::Client::open(format!(
         "redis://{}:{}/",
-        config.redis_host, config.redis_port
+        CONFIG.redis_host, CONFIG.redis_port
     ))?;
 
     let mut conn = redis.get_async_connection().await?;
@@ -62,7 +59,7 @@ async fn real_main() -> ApiResult<()> {
     let amqp = lapin::Connection::connect(
         format!(
             "amqp://{}:{}@{}:{}/%2f",
-            config.rabbit_username, config.rabbit_password, config.rabbit_host, config.rabbit_port
+            CONFIG.rabbit_username, CONFIG.rabbit_password, CONFIG.rabbit_host, CONFIG.rabbit_port
         )
         .as_str(),
         lapin::ConnectionProperties::default(),
@@ -100,7 +97,7 @@ async fn real_main() -> ApiResult<()> {
         )
         .await?;
 
-    if config.default_queue {
+    if CONFIG.default_queue {
         channel
             .queue_declare(
                 QUEUE_RECV,

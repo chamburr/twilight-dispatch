@@ -1,4 +1,4 @@
-use crate::config::get_config;
+use crate::config::CONFIG;
 use crate::constants::METRICS_DUMP_INTERVAL;
 use crate::models::ApiResult;
 
@@ -69,11 +69,9 @@ async fn serve(req: Request<Body>) -> ApiResult<Response<Body>> {
 }
 
 pub async fn run_server() -> ApiResult<()> {
-    let config = get_config();
-
     let addr = SocketAddr::new(
-        IpAddr::from_str(config.prometheus_host.as_str())?,
-        config.prometheus_port as u16,
+        IpAddr::from_str(CONFIG.prometheus_host.as_str())?,
+        CONFIG.prometheus_port as u16,
     );
 
     let make_svc = make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(serve)) });
