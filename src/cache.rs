@@ -1,4 +1,4 @@
-use crate::config::get_config;
+use crate::config::CONFIG;
 use crate::constants::{
     channel_key, emoji_key, guild_key, member_key, message_key, presence_key, private_channel_key,
     role_key, voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL, CACHE_DUMP_INTERVAL, CHANNEL_KEY,
@@ -250,10 +250,8 @@ pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
 
                 if let Err(err) = del_all(conn, keys.as_slice()).await {
                     warn!("Failed to delete expired keys: {:?}", err);
-                } else {
-                    if let Err(err) = del_hashmap(conn, EXPIRY_KEYS, keys.as_slice()).await {
-                        warn!("Failed to delete expired keys hashmap: {:?}", err);
-                    }
+                } else if let Err(err) = del_hashmap(conn, EXPIRY_KEYS, keys.as_slice()).await {
+                    warn!("Failed to delete expired keys hashmap: {:?}", err);
                 }
             }
             Err(err) => {
@@ -281,8 +279,6 @@ async fn clear_guild<T: DeserializeOwned>(
 }
 
 pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResult<Option<Value>> {
-    let config = get_config();
-
     let mut old: Option<Value> = None;
 
     match event {
@@ -363,18 +359,18 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             for voice in data.voice_states.values() {
                 set(conn, voice_key(data.id, voice.user_id), &voice).await?;
             }
-            if config.state_member {
+            if CONFIG.state_member {
                 for member in data.members.values() {
                     set_and_expire(
                         conn,
                         member_key(data.id, member.user.id),
                         &member,
-                        config.state_member_ttl,
+                        CONFIG.state_member_ttl,
                     )
                     .await?;
                 }
             }
-            if config.state_presence {
+            if CONFIG.state_presence {
                 for presence in data.presences.values() {
                     set(conn, presence_key(data.id, presence.user.key()), &presence).await?;
                 }
@@ -419,27 +415,27 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             set(conn, guild_key(data.id), &data).await?;
         }
         Event::MemberAdd(data) => {
-            if config.state_member {
+            if CONFIG.state_member {
                 set_and_expire(
                     conn,
                     member_key(data.guild_id, data.user.id),
                     &data,
-                    config.state_member_ttl,
+                    CONFIG.state_member_ttl,
                 )
                 .await?;
             }
         }
         Event::MemberRemove(data) => {
-            if config.state_member {
+            if CONFIG.state_member {
                 old = get(conn, member_key(data.guild_id, data.user.id)).await?;
                 del(conn, member_key(data.guild_id, data.user.id)).await?;
             }
-            if config.state_presence {
+            if CONFIG.state_presence {
                 del(conn, presence_key(data.guild_id, data.user.id)).await?;
             }
         }
         Event::MemberUpdate(data) => {
-            if config.state_member {
+            if CONFIG.state_member {
                 let member: Option<Member> =
                     get(conn, member_key(data.guild_id, data.user.id)).await?;
                 if let Some(mut member) = member {
@@ -453,44 +449,44 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         conn,
                         member_key(data.guild_id, data.user.id),
                         &member,
-                        config.state_member_ttl,
+                        CONFIG.state_member_ttl,
                     )
                     .await?;
                 }
             }
         }
         Event::MemberChunk(data) => {
-            if config.state_member {
+            if CONFIG.state_member {
                 for member in data.members.values() {
                     set_and_expire(
                         conn,
                         member_key(data.guild_id, member.user.id),
                         &member,
-                        config.state_member_ttl,
+                        CONFIG.state_member_ttl,
                     )
                     .await?;
                 }
             }
         }
         Event::MessageCreate(data) => {
-            if config.state_message {
+            if CONFIG.state_message {
                 set_and_expire(
                     conn,
                     message_key(data.channel_id, data.id),
                     &data,
-                    config.state_message_ttl,
+                    CONFIG.state_message_ttl,
                 )
                 .await?;
             }
         }
         Event::MessageDelete(data) => {
-            if config.state_message {
+            if CONFIG.state_message {
                 old = get(conn, message_key(data.channel_id, data.id)).await?;
                 del(conn, message_key(data.channel_id, data.id)).await?;
             }
         }
         Event::MessageDeleteBulk(data) => {
-            if config.state_message {
+            if CONFIG.state_message {
                 let mut messages = vec![];
                 for id in &data.ids {
                     let message: Option<Message> =
@@ -504,7 +500,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             }
         }
         Event::MessageUpdate(data) => {
-            if config.state_message {
+            if CONFIG.state_message {
                 let message: Option<Message> =
                     get(conn, message_key(data.channel_id, data.id)).await?;
                 if let Some(mut message) = message {
@@ -546,14 +542,14 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         conn,
                         message_key(data.channel_id, data.id),
                         &message,
-                        config.state_message_ttl,
+                        CONFIG.state_message_ttl,
                     )
                     .await?;
                 }
             }
         }
         Event::PresenceUpdate(data) => {
-            if config.state_presence {
+            if CONFIG.state_presence {
                 old = get(conn, presence_key(data.guild_id, data.user.key())).await?;
                 set(conn, presence_key(data.guild_id, data.user.key()), &data).await?;
             }

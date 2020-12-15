@@ -1,5 +1,5 @@
 use crate::cache;
-use crate::config::get_config;
+use crate::config::CONFIG;
 use crate::constants::{CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, READY_COLOR, RESUME_COLOR};
 use crate::metrics::{GATEWAY_EVENTS, SHARD_EVENTS};
 use crate::models::{DeliveryInfo, DeliveryOpcode, PayloadData, PayloadInfo};
@@ -12,15 +12,13 @@ use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
 pub async fn outgoing(mut conn: redis::aio::Connection, cluster: Cluster, channel: lapin::Channel) {
-    let config = get_config();
-
-    let shard_strings: Vec<String> = (0..config.shards_total).map(|x| x.to_string()).collect();
+    let shard_strings: Vec<String> = (0..CONFIG.shards_total).map(|x| x.to_string()).collect();
 
     let mut events = cluster.some_events(get_event_flags());
 
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
-        if config.state_enabled {
+        if CONFIG.state_enabled {
             match cache::update(&mut conn, &event).await {
                 Ok(value) => {
                     old = value;
@@ -109,7 +107,7 @@ pub async fn outgoing(mut conn: redis::aio::Connection, cluster: Cluster, channe
                 info!("[Shard {}] Resuming (sequence: {})", shard, data.seq);
                 SHARD_EVENTS.with_label_values(&["Resuming"]).inc();
             }
-            Event::ShardPayload(mut data) if config.state_enabled => {
+            Event::ShardPayload(mut data) if CONFIG.state_enabled => {
                 match simd_json::from_slice::<PayloadData>(data.bytes.as_mut_slice()) {
                     Ok(mut payload) => {
                         if let Some(kind) = payload.t.as_deref() {
