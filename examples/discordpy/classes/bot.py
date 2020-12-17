@@ -34,7 +34,7 @@ class Bot(commands.AutoShardedBot):
         self.description = inspect.cleandoc(description) if description else ""
         self.owner_id = kwargs.get("owner_id")
         self.owner_ids = kwargs.get("owner_ids", set())
-        self._skip_check = lambda x, y: x != y
+        self._skip_check = lambda x, y: x == y
         self.help_command = help_command
         self.case_insensitive = kwargs.get("case_insensitive", False)
         self.all_commands = _CaseInsensitiveDict() if self.case_insensitive else {}
@@ -103,7 +103,6 @@ class Bot(commands.AutoShardedBot):
         old = msg.get("old")
 
         if op != self.ws.DISPATCH:
-            print("here")
             return
 
         try:
@@ -159,6 +158,8 @@ class Bot(commands.AutoShardedBot):
         self.ws._discord_parsers = self._connection.parsers
         self.ws._dispatch = self.dispatch
         self.ws.call_hooks = self._connection.call_hooks
+
+        await self.http.static_login(self.config.token, bot=True)
 
         for extension in self.config.cogs:
             try:

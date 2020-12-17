@@ -4,9 +4,9 @@ import logging
 
 from classes.bot import Bot
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 log = logging.getLogger(__name__)
 
