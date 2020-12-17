@@ -23,7 +23,7 @@ pub const KEYS_SUFFIX: &str = "_keys";
 pub const EXPIRY_KEYS: &str = "expiry_keys";
 
 pub const CACHE_DUMP_INTERVAL: usize = 1000;
-pub const CACHE_CLEANUP_INTERVAL: usize = 100;
+pub const CACHE_CLEANUP_INTERVAL: usize = 1000;
 pub const METRICS_DUMP_INTERVAL: usize = 1000;
 
 pub const DISCONNECT_COLOR: usize = 0xFF0000;
