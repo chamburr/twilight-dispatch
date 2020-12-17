@@ -38,6 +38,8 @@ class State:
         self._voice_clients = {}
         self._private_channels_by_user = {}
 
+        self.allowed_mentions = options.get("allowed_mentions")
+
         self.parsers = {}
         for attr, func in inspect.getmembers(self):
             if attr.startswith("parse_"):
@@ -129,7 +131,6 @@ class State:
         for result in results:
             channel = self.get_channel(int(result["channel_id"]))
             if channel:
-                print(result)
                 messages.append(Message(channel=channel, state=self, data=result))
         return messages
 

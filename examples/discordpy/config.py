@@ -1,4 +1,4 @@
-token = ""
+token = "NjAzODc5NDE2NDE3ODc4MDQ3.XTl0iA.PTZPdcnhpiV0Zm3iNmaMUgpphPg"
 
 prefix = "~"
 
