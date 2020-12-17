@@ -43,6 +43,15 @@ pub async fn get_members<T: FromRedisValue>(
     Ok(res)
 }
 
+pub async fn get_members_len(
+    conn: &mut redis::aio::Connection,
+    key: impl ToString,
+) -> ApiResult<u64> {
+    let res = conn.scard(key.to_string()).await?;
+
+    Ok(res)
+}
+
 pub async fn get_hashmap<T: FromRedisValue + Eq + Hash, U: FromRedisValue>(
     conn: &mut redis::aio::Connection,
     key: impl ToString,
@@ -115,7 +124,7 @@ pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiR
         return Ok(());
     }
 
-    conn.del(keys.clone()).await?;
+    conn.del(keys).await?;
 
     let mut all_keys = HashMap::new();
 
@@ -125,7 +134,7 @@ pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiR
         if parts.len() > 1 {
             all_keys
                 .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
-                .or_insert(vec![])
+                .or_insert_with(Vec::new)
                 .push(key);
         }
 
@@ -133,12 +142,12 @@ pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiR
             if parts[0] != MESSAGE_KEY {
                 all_keys
                     .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
-                    .or_insert(vec![])
+                    .or_insert_with(Vec::new)
                     .push(key);
             } else {
                 all_keys
                     .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
-                    .or_insert(vec![])
+                    .or_insert_with(Vec::new)
                     .push(key);
             }
         }
@@ -166,9 +175,9 @@ pub async fn del_hashmap(
         return Ok(());
     }
 
-    let res = conn.hdel(key.to_string(), fields).await?;
+    let _: () = conn.hdel(key.to_string(), fields).await?;
 
-    Ok(res)
+    Ok(())
 }
 
 pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {

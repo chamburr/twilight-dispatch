@@ -11,7 +11,11 @@ use tokio::stream::StreamExt;
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
-pub async fn outgoing(mut conn: redis::aio::Connection, cluster: Cluster, channel: lapin::Channel) {
+pub async fn outgoing(
+    conn: &mut redis::aio::Connection,
+    cluster: Cluster,
+    channel: lapin::Channel,
+) {
     let shard_strings: Vec<String> = (0..CONFIG.shards_total).map(|x| x.to_string()).collect();
 
     let mut events = cluster.some_events(get_event_flags());
@@ -19,7 +23,7 @@ pub async fn outgoing(mut conn: redis::aio::Connection, cluster: Cluster, channe
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
         if CONFIG.state_enabled {
-            match cache::update(&mut conn, &event).await {
+            match cache::update(conn, &event).await {
                 Ok(value) => {
                     old = value;
                 }
