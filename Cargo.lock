@@ -1911,8 +1911,7 @@ dependencies = [
 [[package]]
 name = "twilight-gateway"
 version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "991b2ae8f7416dfc8bf660549f612ad51ecc5ffc74681d14dc18b85a9cae1ec4"
+source = "git+https://github.com/chamburr/twilight?branch=fix-model-serialising-null#6cf18e35a01be54656b833af66ea7379a09916af"
 dependencies = [
  "async-tungstenite",
  "bitflags",
@@ -1935,8 +1934,7 @@ dependencies = [
 [[package]]
 name = "twilight-gateway-queue"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c117423a2de1df3daf876e3edad92b33ade210b5f0f621f1f53951b45573d9c3"
+source = "git+https://github.com/chamburr/twilight?branch=fix-model-serialising-null#6cf18e35a01be54656b833af66ea7379a09916af"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -1948,8 +1946,7 @@ dependencies = [
 [[package]]
 name = "twilight-http"
 version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c0187cc65bb4fbb1cf1c423cbf7440c272ce80bdee95e7df796344a53ab1ea1"
+source = "git+https://github.com/chamburr/twilight?branch=fix-model-serialising-null#6cf18e35a01be54656b833af66ea7379a09916af"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -1969,8 +1966,7 @@ dependencies = [
 [[package]]
 name = "twilight-model"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7366e917f11e2bdd47758cc37e02bb20be84a3b18e5de9b86e1c6c8bf3e42740"
+source = "git+https://github.com/chamburr/twilight?branch=fix-model-serialising-null#6cf18e35a01be54656b833af66ea7379a09916af"
 dependencies = [
  "bitflags",
  "serde",
