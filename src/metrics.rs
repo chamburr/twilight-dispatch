@@ -114,15 +114,25 @@ struct StateStats {
 }
 
 async fn get_state_stats(conn: &mut redis::aio::Connection) -> ApiResult<StateStats> {
+    let guilds = cache::get_members_len(conn, format!("{}{}", GUILD_KEY, KEYS_SUFFIX)).await?;
+    let channels = cache::get_members_len(conn, format!("{}{}", CHANNEL_KEY, KEYS_SUFFIX)).await?;
+    let messages = cache::get_members_len(conn, format!("{}{}", MESSAGE_KEY, KEYS_SUFFIX)).await?;
+    let roles = cache::get_members_len(conn, format!("{}{}", ROLE_KEY, KEYS_SUFFIX)).await?;
+    let emojis = cache::get_members_len(conn, format!("{}{}", EMOJI_KEY, KEYS_SUFFIX)).await?;
+    let members = cache::get_members_len(conn, format!("{}{}", MEMBER_KEY, KEYS_SUFFIX)).await?;
+    let presences =
+        cache::get_members_len(conn, format!("{}{}", PRESENCE_KEY, KEYS_SUFFIX)).await?;
+    let voices = cache::get_members_len(conn, format!("{}{}", VOICE_KEY, KEYS_SUFFIX)).await?;
+
     Ok(StateStats {
-        guilds: cache::get_members_len(conn, format!("{}{}", GUILD_KEY, KEYS_SUFFIX)).await?,
-        channels: cache::get_members_len(conn, format!("{}{}", CHANNEL_KEY, KEYS_SUFFIX)).await?,
-        messages: cache::get_members_len(conn, format!("{}{}", MESSAGE_KEY, KEYS_SUFFIX)).await?,
-        roles: cache::get_members_len(conn, format!("{}{}", ROLE_KEY, KEYS_SUFFIX)).await?,
-        emojis: cache::get_members_len(conn, format!("{}{}", EMOJI_KEY, KEYS_SUFFIX)).await?,
-        members: cache::get_members_len(conn, format!("{}{}", MEMBER_KEY, KEYS_SUFFIX)).await?,
-        presences: cache::get_members_len(conn, format!("{}{}", PRESENCE_KEY, KEYS_SUFFIX)).await?,
-        voices: cache::get_members_len(conn, format!("{}{}", VOICE_KEY, KEYS_SUFFIX)).await?,
+        guilds,
+        channels,
+        messages,
+        roles,
+        emojis,
+        members,
+        presences,
+        voices,
     })
 }
 
