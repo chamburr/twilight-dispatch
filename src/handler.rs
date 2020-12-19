@@ -162,18 +162,31 @@ pub async fn outgoing(
                                 .with_label_values(&[kind, shard_strings[shard as usize].as_str()])
                                 .inc();
 
-                            let result = channel
-                                .basic_publish(
-                                    EXCHANGE,
-                                    kind,
-                                    BasicPublishOptions::default(),
-                                    data.bytes,
-                                    BasicProperties::default(),
-                                )
-                                .await;
+                            match simd_json::to_vec(&payload) {
+                                Ok(payload) => {
+                                    let result = channel
+                                        .basic_publish(
+                                            EXCHANGE,
+                                            kind,
+                                            BasicPublishOptions::default(),
+                                            payload,
+                                            BasicProperties::default(),
+                                        )
+                                        .await;
 
-                            if let Err(err) = result {
-                                warn!("[Shard {}] Failed to publish event: {:?}", shard, err);
+                                    if let Err(err) = result {
+                                        warn!(
+                                            "[Shard {}] Failed to publish event: {:?}",
+                                            shard, err
+                                        );
+                                    }
+                                }
+                                Err(err) => {
+                                    warn!(
+                                        "[Shard {}] Failed to serialize payload: {:?}",
+                                        shard, err
+                                    );
+                                }
                             }
                         }
                     }
