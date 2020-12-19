@@ -108,6 +108,7 @@ pub struct StatusInfo {
 pub struct PayloadInfo {
     pub op: OpCode,
     pub t: Option<String>,
+    pub d: Value,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
