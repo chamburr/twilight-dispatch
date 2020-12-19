@@ -11,7 +11,8 @@ class Events(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        log.info(f"{self.bot.user.name}#{self.bot.user.discriminator} is ready")
+        user = await self.bot.user()
+        log.info(f"{user.name}#{user.discriminator} is ready")
         log.info("--------")
 
     @commands.Cog.listener()

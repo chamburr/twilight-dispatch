@@ -68,94 +68,88 @@ class Guild(guild.Guild):
         self._public_updates_channel_id = utils._get_as_snowflake(guild, "public_updates_channel_id")
         self._large = None if member_count is None else self._member_count >= 250
         self.owner_id = utils._get_as_snowflake(guild, "owner_id")
-        self.afk_channel = self.get_channel(utils._get_as_snowflake(guild, "afk_channel_id"))
+        self._afk_channel_id = utils._get_as_snowflake(guild, "afk_channel_id")
 
-    @property
-    def _channels(self):
+    async def _channels(self):
         channels = []
-        for channel in self._state._members_get_all("guild", key_id=self.id, name="channel"):
+        for channel in await self._state._members_get_all("guild", key_id=self.id, name="channel"):
             factory, _ = _channel_factory(channel["type"])
             channels.append(factory(guild=self, state=self._state, data=channel))
         return channels
 
-    @property
-    def _members(self):
+    async def _members(self):
         members = []
-        for member in self._state._members_get_all("guild", key_id=self.id, name="member"):
+        for member in await self._state._members_get_all("guild", key_id=self.id, name="member"):
             members.append(Member(guild=self, state=self._state, data=member))
         return members
 
-    @property
-    def _roles(self):
+    async def _roles(self):
         roles = []
-        for role in self._state._members_get_all("guild", key_id=self.id, name="role"):
+        for role in await self._state._members_get_all("guild", key_id=self.id, name="role"):
             roles.append(Role(guild=self, state=self._state, data=role))
         return roles
 
-    @property
-    def _voice_states(self):
+    async def _voice_states(self):
         voices = []
-        for voice in self._state._members_get_all("guild", key_id=self.id, name="voice"):
+        for voice in await self._state._members_get_all("guild", key_id=self.id, name="voice"):
             if voice["channel_id"]:
-                channel = self.get_channel(int(voice["channel_id"]))
+                channel = await self.get_channel(int(voice["channel_id"]))
                 if channel:
                     voices.append(VoiceState(channel=channel, data=voice))
             else:
                 voices.append(VoiceState(channel=None, data=voice))
         return voices
 
-    def _voice_state_for(self, user_id):
-        result = self._state._get(f"voice:{self.id}:{user_id}")
+    async def _voice_state_for(self, user_id):
+        result = await self._state._get(f"voice:{self.id}:{user_id}")
         if result and result["channel_id"]:
-            channel = self.get_channel(int(result["channel_id"]))
+            channel = await self.get_channel(int(result["channel_id"]))
             if channel:
                 result = VoiceState(channel=channel, data=result)
         elif result:
             result = VoiceState(channel=None, data=result)
         return result
 
-    @property
-    def channels(self):
-        return self._channels
+    async def channels(self):
+        return await self._channels()
 
-    def get_channel(self, channel_id):
-        result = self._state._get(f"channel:{self.id}:{channel_id}")
+    async def get_channel(self, channel_id):
+        result = await self._state._get(f"channel:{self.id}:{channel_id}")
         if not result:
             return None
         factory, _ = _channel_factory(result["type"])
         return factory(guild=self, state=self._state, data=result)
 
-    @property
-    def system_channel(self):
+    async def afk_channel(self):
+        channel_id = self._afk_channel_id
+        return channel_id and await self.get_channel(channel_id)
+
+    async def system_channel(self):
         channel_id = self._system_channel_id
-        return channel_id and self.get_channel(channel_id)
+        return channel_id and await self.get_channel(channel_id)
 
-    @property
-    def rules_channel(self):
+    async def rules_channel(self):
         channel_id = self._rules_channel_id
-        return channel_id and self.get_channel(channel_id)
+        return channel_id and await self.get_channel(channel_id)
 
-    @property
-    def public_updates_channel(self):
+    async def public_updates_channel(self):
         channel_id = self._public_updates_channel_id
-        return channel_id and self.get_channel(channel_id)
+        return channel_id and await self.get_channel(channel_id)
 
-    @property
-    def members(self):
-        return self._members
+    async def members(self):
+        return await self._members()
 
-    def get_member(self, user_id):
-        result = self._state._get(f"member:{self.id}:{user_id}")
+    async def get_member(self, user_id):
+        result = await self._state._get(f"member:{self.id}:{user_id}")
         if result:
             result = Member(guild=self, state=self._state, data=result)
         return result
 
-    @property
-    def roles(self):
-        return self._roles
+    async def roles(self):
+        return await self._roles()
 
-    def get_role(self, role_id):
-        result = self._state._get(f"role:{self.id}:{role_id}")
+    async def get_role(self, role_id):
+        result = await self._state._get(f"role:{self.id}:{role_id}")
         if result:
             Role(guild=self, state=self._state, data=result)
         return result

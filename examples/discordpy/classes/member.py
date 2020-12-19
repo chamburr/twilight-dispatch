@@ -18,17 +18,14 @@ class Member(member.Member):
         self._update_roles(data)
         self.nick = data.get("nick", None)
 
-    @property
-    def _presence(self):
-        return self._state._get(f"presence:{self.guild.id}:{self._user.id}") or {}
+    async def _presence(self):
+        return await self._state._get(f"presence:{self.guild.id}:{self._user.id}") or {}
 
-    @property
-    def activities(self):
-        return tuple(map(create_activity, self._presence.get("activities", [])))
+    async def activities(self):
+        return tuple(map(create_activity, (await self._presence()).get("activities", [])))
 
-    @property
-    def _client_status(self):
-        presence = self._presence
+    async def _client_status(self):
+        presence = await self._presence()
         status = {sys.intern(x): sys.intern(y) for x, y in presence.get("client_status", {}).items()}
         status[None] = sys.intern(presence["status"]) if presence.get("status") else "offline"
         return status
