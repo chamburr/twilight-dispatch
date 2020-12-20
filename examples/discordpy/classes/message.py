@@ -12,6 +12,7 @@ from discord.reaction import Reaction
 class Message(message.Message):
     def __init__(self, *, state, channel, data):
         self._state = state
+        self._data = data
         self.id = int(data["id"])
         self.webhook_id = utils._get_as_snowflake(data, "webhook_id")
         self.reactions = [Reaction(message=self, data=d) for d in data.get("reactions", [])]
@@ -38,52 +39,59 @@ class Message(message.Message):
             except KeyError:
                 continue
 
-    async def _fill_data(self, data):
+    async def author(self):
         try:
-            author = data["author"]
-            self.author = self._state.store_user(author)
+            author = self._data["author"]
+            author = self._state.store_user(author)
             if isinstance(self.guild, Guild):
-                found = await self.guild.get_member(self.author.id)
+                found = await self.guild.get_member(author.id)
                 if found is not None:
-                    self.author = found
+                    author = found
+            return author
         except KeyError:
-            pass
+            return None
 
+    async def member(self):
         try:
-            member = data["member"]
-            author = self.author
+            member = self._data["member"]
+            author = await self.author()
             try:
                 author._update_from_message(member)
             except AttributeError:
-                self.author = Member._from_message(message=self, data=member)
+                author = Member._from_message(message=self, data=member)
+            return author
         except KeyError:
-            pass
+            return None
 
+    async def mentions(self):
         try:
-            mentions = data["mentions"]
-            self.mentions = r = []
+            mentions = self._data["mentions"]
+            members = []
             guild = self.guild
             state = self._state
             if not isinstance(guild, Guild):
-                self.mentions = [state.store_user(m) for m in mentions]
+                members = [state.store_user(m) for m in mentions]
             else:
                 for mention in filter(None, mentions):
                     id_search = int(mention["id"])
                     member = await guild.get_member(id_search)
                     if member is not None:
-                        r.append(member)
+                        members.append(member)
                     else:
-                        r.append(Member._try_upgrade(data=mention, guild=guild, state=state))
+                        members.append(Member._try_upgrade(data=mention, guild=guild, state=state))
+            return members
         except KeyError:
-            pass
+            return []
 
+    async def role_mentions(self):
         try:
-            role_mentions = data["mention_roles"]
-            self.role_mentions = []
+            mentions = self._data["mention_roles"]
+            roles = []
             if isinstance(self.guild, Guild):
-                for role_id in map(int, role_mentions):
+                for role_id in map(int, mentions):
                     role = await self.guild.get_role(role_id)
                     if role is not None:
-                        self.role_mentions.append(role)
+                        roles.append(role)
+            return roles
         except KeyError:
-            pass
+            return []

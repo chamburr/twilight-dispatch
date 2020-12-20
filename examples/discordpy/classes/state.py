@@ -49,17 +49,18 @@ class State:
         result = await self.redis.get(key)
         if result:
             result = orjson.loads(result)
-            result["_key"] = key
-            if result.get("permission_overwrites"):
-                result["permission_overwrites"] = [
-                    {
-                        "id": x["id"],
-                        "type": "role" if x["type"] == 0 else "member",
-                        "allow": int(x["allow"]),
-                        "deny": int(x["deny"]),
-                    }
-                    for x in result["permission_overwrites"]
-                ]
+            if isinstance(result, dict):
+                result["_key"] = key
+                if result.get("permission_overwrites"):
+                    result["permission_overwrites"] = [
+                        {
+                            "id": x["id"],
+                            "type": "role" if x["type"] == 0 else "member",
+                            "allow": int(x["allow"]),
+                            "deny": int(x["deny"]),
+                        }
+                        for x in result["permission_overwrites"]
+                    ]
         return result
 
     async def _members(self, key, key_id=None):
@@ -126,7 +127,6 @@ class State:
             channel = await self.get_channel(int(result["channel_id"]))
             if channel:
                 message = Message(channel=channel, state=self, data=result)
-                await message._fill_data(result)
                 messages.append(message)
         return messages
 
@@ -245,7 +245,6 @@ class State:
             channel = await self.get_channel(self._key_first(result))
             if channel:
                 result = Message(channel=channel, state=self, data=result)
-                await result._fill_data(result)
         return result
 
     def _add_guild_from_data(self, guild):
@@ -308,7 +307,7 @@ class State:
     async def parse_message_create(self, data, old):
         channel = await self.get_channel(int(data["channel_id"]))
         if channel:
-            message = await self.create_message(channel=channel, data=data)
+            message = self.create_message(channel=channel, data=data)
             self.dispatch("message", message)
 
     async def parse_message_delete(self, data, old):
@@ -316,7 +315,7 @@ class State:
         if old:
             channel = await self.get_channel(int(data["channel_id"]))
             if channel:
-                old = await self.create_message(channel=channel, data=old)
+                old = self.create_message(channel=channel, data=old)
                 raw.cached_message = old
                 self.dispatch("message_delete", old)
         self.dispatch("raw_message_delete", raw)
@@ -328,7 +327,7 @@ class State:
             for old_message in old:
                 channel = await self.get_channel(int(old_message["channel_id"]))
                 if channel:
-                    messages.append(await self.create_message(channel=channel, data=old_message))
+                    messages.append(self.create_message(channel=channel, data=old_message))
             raw.cached_messages = old
             self.dispatch("bulk_message_delete", old)
         self.dispatch("raw_bulk_message_delete", raw)
@@ -338,7 +337,7 @@ class State:
         if old:
             channel = await self.get_channel(int(data["channel_id"]))
             if channel:
-                old = await self.create_message(channel=channel, data=old)
+                old = self.create_message(channel=channel, data=old)
                 raw.cached_message = old
                 new = copy.copy(old)
                 new._update(data)
@@ -639,13 +638,18 @@ class State:
 
     async def _get_reaction_user(self, channel, user_id):
         if isinstance(channel, TextChannel):
-            return channel.guild.get_member(user_id)
+            return await channel.guild.get_member(user_id)
         return await self.get_user(user_id)
 
     async def get_reaction_emoji(self, data):
-        return await self.get_emoji(int(data["id"]))
+        emoji_id = utils._get_as_snowflake(data, "id")
+        if not emoji_id:
+            return data["name"]
+        return await self.get_emoji(emoji_id)
 
     async def _upgrade_partial_emoji(self, emoji):
+        if not emoji.id:
+            return emoji.name
         return await self.get_emoji(emoji.id)
 
     async def get_channel(self, channel_id):
@@ -653,7 +657,6 @@ class State:
             return None
         return await self._get_private_channel(channel_id) or await self._get_guild_channel(channel_id)
 
-    async def create_message(self, *, channel, data):
+    def create_message(self, *, channel, data):
         message = Message(state=self, channel=channel, data=data)
-        await message._fill_data(data)
         return message
