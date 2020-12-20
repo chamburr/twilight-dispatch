@@ -1,5 +1,6 @@
 import io
 import logging
+import orjson
 import textwrap
 import traceback
 
@@ -20,6 +21,15 @@ class General(commands.Cog):
     @commands.command(description="Play ping pong!")
     async def ping(self, ctx):
         await ctx.send("Pong! 🏓")
+
+    @commands.command(description="Reaction menu example.")
+    async def menu(self, ctx):
+        msg = await ctx.send("Page 1")
+        await msg.add_reaction("◀️")
+        await msg.add_reaction("▶️")
+        menus = await self.bot._connection._get("reaction_menus") or []
+        menus.append({"channel": msg.channel.id, "message": msg.id, "page": 0, "all_pages": ["Page 1", "Page 2"]})
+        await self.bot._connection.redis.set("reaction_menus", orjson.dumps(menus).decode("utf-8"))
 
     @commands.is_owner()
     @commands.command(name="eval", description="Evaluate code and play around.")

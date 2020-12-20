@@ -130,7 +130,7 @@ class Bot(commands.AutoShardedBot):
         view = StringView(message.content)
         ctx = cls(prefix=None, view=view, bot=self, message=message)
 
-        if self._skip_check(message.author.id, (await self.user()).id):
+        if self._skip_check((await message.author()).id, (await self.user()).id):
             return ctx
 
         prefix = await self.get_prefix(message)
@@ -163,6 +163,13 @@ class Bot(commands.AutoShardedBot):
         ctx.prefix = invoked_prefix
         ctx.command = self.all_commands.get(invoker)
         return ctx
+
+    async def process_commands(self, message):
+        if (await message.author()).bot:
+            return
+
+        ctx = await self.get_context(message)
+        await self.invoke(ctx)
 
     async def receive_message(self, msg):
         self.ws._dispatch("socket_raw_receive", msg)
