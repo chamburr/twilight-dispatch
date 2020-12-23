@@ -1,0 +1,30 @@
+[package]
+name = "twilight-dispatch-andesite"
+version = "0.1.0"
+authors = ["CHamburr <hi@chamburr.xyz>"]
+edition = "2018"
+
+[dependencies]
+dotenv = { version = "0.15", default-features = false }
+futures = { version = "0.3", default-features = false, features = ["std"] }
+hyper = { version = "0.13", default-features = false }
+lapin = { version = "1.6", default-features = false }
+lazy_static = { version = "1.4", default-features = false}
+prometheus = { version = "0.11", default-features = false, features = ["process"] }
+redis = { version = "0.17", default-features = false, features = ["tokio-rt-core"] }
+reqwest = { version = "0.10.10", default-features = false, features = ["json"] }
+serde = { version = "1.0", default-features = false }
+simd-json = { version = "0.3", default-features = false, features = ["serde_impl"] }
+tokio = { version = "0.2", default-features = false, features = ["rt-threaded", "macros"] }
+tracing = { version = "0.1", default-features = false }
+tracing-subscriber = { version = "0.2", default-features = false, features = ["fmt"] }
+twilight-model = { version = "0.2", default-features = false }
+
+[dependencies.twilight-andesite]
+git = "https://github.com/chamburr/twilight-andesite"
+branch = "master"
+default-features = false
+features = ["http-support", "rustls"]
+
+[profile.release]
+lto = "thin"
