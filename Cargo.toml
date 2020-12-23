@@ -5,23 +5,23 @@ authors = ["CHamburr <hi@chamburr.xyz>"]
 edition = "2018"
 
 [dependencies]
-dotenv = "0.15"
+dotenv = { version = "0.15", default-features = false}
 hyper = { version = "0.13", default-features = false }
 lapin = { version = "1.6", default-features = false }
-lazy_static = "1.4"
+lazy_static = { version = "1.4", default-features = false }
 prometheus = { version = "0.11", default-features = false, features = ["process"] }
 redis = { version = "0.17", default-features = false, features = ["tokio-rt-core"] }
-serde = "1.0"
-serde-mappable-seq = "0.1"
-serde_repr = "0.1"
+serde = { version = "1.0", default-features = false }
+serde-mappable-seq = { version = "0.1", default-features = false }
+serde_repr = { version = "0.1", default-features = false }
 simd-json = { version = "0.3", default-features = false }
 time = { version = "0.2", default-features = false, features = ["std"] }
 tokio = { version = "0.2", default-features = false, features = ["rt-threaded", "macros", "signal", "time"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "env-filter", "fmt", "registry"] }
+tracing = { version = "0.1", default-features = false }
+tracing-subscriber = { version = "0.2", default-features = false, features = ["env-filter", "fmt"] }
 #twilight-gateway = { version = "0.2", default-features = false, features = ["rustls", "simd-json", "simd-zlib"] }
 #twilight-http = { version = "0.2", default-features = false, features = ["rustls", "simd-json"] }
-#twilight-model = "0.2"
+#twilight-model = { version = "0.2", default-features = false }
 
 [dependencies.twilight-gateway]
 git = "https://github.com/chamburr/twilight"
@@ -38,6 +38,7 @@ features = ["rustls", "simd-json"]
 [dependencies.twilight-model]
 git = "https://github.com/chamburr/twilight"
 branch = "fix-model-serialising-null"
+default-features = false
 
 [profile.release]
 lto = "thin"
