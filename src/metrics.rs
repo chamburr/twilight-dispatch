@@ -35,6 +35,12 @@ lazy_static! {
         &["type"]
     )
     .unwrap();
+    pub static ref GUILD_EVENTS: IntCounterVec = register_int_counter_vec!(
+        "gateway_guild_events",
+        "Discord guild join and leave events",
+        &["type"]
+    )
+    .unwrap();
     pub static ref GATEWAY_SHARDS: IntGauge = register_int_gauge!(
         "gateway_shards",
         "Number of gateway connections with Discord"

@@ -1,7 +1,7 @@
 use crate::cache;
 use crate::config::CONFIG;
 use crate::constants::{CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, READY_COLOR, RESUME_COLOR};
-use crate::metrics::{GATEWAY_EVENTS, SHARD_EVENTS};
+use crate::metrics::{GATEWAY_EVENTS, GUILD_EVENTS, SHARD_EVENTS};
 use crate::models::{DeliveryInfo, DeliveryOpcode, PayloadData, PayloadInfo};
 use crate::utils::{get_event_flags, log_discord};
 
@@ -193,6 +193,16 @@ pub async fn outgoing(
                     Err(err) => {
                         warn!("[Shard {}] Could not decode payload: {:?}", shard, err);
                     }
+                }
+            }
+            Event::GuildCreate(_) => {
+                if old.is_none() {
+                    GUILD_EVENTS.with_label_values(&["Join"]).inc();
+                }
+            }
+            Event::GuildDelete(data) => {
+                if !data.unavailable {
+                    GUILD_EVENTS.with_label_values(&["Leave"]).inc();
                 }
             }
             _ => {}
