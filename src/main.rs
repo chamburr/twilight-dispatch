@@ -1,3 +1,5 @@
+#![deny(clippy::all, nonstandard_style, rust_2018_idioms)]
+
 use crate::config::CONFIG;
 use crate::constants::{EXCHANGE, QUEUE_RECV, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY};
 use crate::models::{ApiResult, FormattedDateTime, SessionInfo};
