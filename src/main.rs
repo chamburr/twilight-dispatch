@@ -168,8 +168,8 @@ async fn real_main() -> ApiResult<()> {
 
     let consumer = channel_send
         .basic_consume(
-            "",
             QUEUE_SEND,
+            "",
             BasicConsumeOptions::default(),
             FieldTable::default(),
         )
