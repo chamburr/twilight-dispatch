@@ -5,6 +5,7 @@ pub const QUEUE_RECV: &str = "player.recv";
 pub const QUEUE_SEND: &str = "player.send";
 
 pub const PLAYER_BUFFER: usize = 300000;
+pub const PLAYER_EXPIRY: usize = 30000;
 
 pub const PLAYER_KEY: &str = "player";
 pub const PLAYER_ID_KEY: &str = "player_id";

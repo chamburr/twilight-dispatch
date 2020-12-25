@@ -1,4 +1,4 @@
-use crate::constants::{player_key, PLAYER_STATS_KEY};
+use crate::constants::{player_key, PLAYER_EXPIRY, PLAYER_STATS_KEY};
 use crate::metrics::{PLAYED_TRACKS, VOICE_CLOSES};
 use crate::models::{ApiResult, Player};
 use crate::utils::decode_track;
@@ -6,6 +6,7 @@ use crate::utils::decode_track;
 use redis::AsyncCommands;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::time::Duration;
 use tracing::warn;
 use twilight_andesite::model::IncomingEvent;
 
@@ -31,18 +32,19 @@ pub async fn set<T: Serialize>(
     Ok(())
 }
 
-pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiResult<()> {
-    if keys.is_empty() {
-        return Ok(());
-    }
-
-    conn.del(keys).await?;
+pub async fn expire(
+    conn: &mut redis::aio::Connection,
+    key: impl ToString,
+    duration: Duration,
+) -> ApiResult<()> {
+    conn.expire(key.to_string(), duration.as_secs() as usize)
+        .await?;
 
     Ok(())
 }
 
-pub async fn del<T: ToString>(conn: &mut redis::aio::Connection, key: T) -> ApiResult<()> {
-    del_all(conn, &[key.to_string()]).await?;
+pub async fn del(conn: &mut redis::aio::Connection, key: impl ToString) -> ApiResult<()> {
+    conn.del(key.to_string()).await?;
 
     Ok(())
 }
@@ -59,6 +61,12 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &IncomingEvent) ->
                 filters: data.state.filters.clone(),
             };
             set(conn, player_key(data.guild_id), &player).await?;
+            expire(
+                conn,
+                player_key(data.guild_id),
+                Duration::from_millis(PLAYER_EXPIRY as u64),
+            )
+            .await?;
         }
         IncomingEvent::Stats(data) => {
             set(conn, PLAYER_STATS_KEY, data).await?;
