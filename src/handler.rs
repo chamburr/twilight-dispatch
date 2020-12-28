@@ -1,12 +1,16 @@
 use crate::cache;
 use crate::config::CONFIG;
-use crate::constants::{CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, READY_COLOR, RESUME_COLOR};
+use crate::constants::{
+    CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, JOIN_COLOR, LEAVE_COLOR, READY_COLOR, RESUME_COLOR,
+};
 use crate::metrics::{GATEWAY_EVENTS, GUILD_EVENTS, SHARD_EVENTS};
 use crate::models::{DeliveryInfo, DeliveryOpcode, PayloadData, PayloadInfo};
-use crate::utils::{get_event_flags, log_discord};
+use crate::utils::{get_event_flags, log_discord, log_discord_guild};
 
 use lapin::options::{BasicAckOptions, BasicPublishOptions};
 use lapin::{BasicProperties, Consumer};
+use simd_json::json;
+use simd_json::Value;
 use tokio::stream::StreamExt;
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
@@ -195,14 +199,38 @@ pub async fn outgoing(
                     }
                 }
             }
-            Event::GuildCreate(_) => {
+            Event::GuildCreate(data) => {
                 if old.is_none() {
                     GUILD_EVENTS.with_label_values(&["Join"]).inc();
+                    log_discord_guild(
+                        &cluster,
+                        JOIN_COLOR,
+                        "Guild Join",
+                        format!("{} ({})", data.name, data.id),
+                    )
+                    .await;
                 }
             }
             Event::GuildDelete(data) => {
                 if !data.unavailable {
                     GUILD_EVENTS.with_label_values(&["Leave"]).inc();
+                    let old_data = old.unwrap_or(json!({}));
+                    let guild = old_data.as_object().unwrap();
+                    log_discord_guild(
+                        &cluster,
+                        LEAVE_COLOR,
+                        "Guild Leave",
+                        format!(
+                            "{} ({})",
+                            guild
+                                .get("name")
+                                .unwrap_or(&json!("Unknown"))
+                                .as_str()
+                                .unwrap(),
+                            guild.get("id").unwrap_or(&json!(0)).as_u64().unwrap()
+                        ),
+                    )
+                    .await;
                 }
             }
             _ => {}
