@@ -26,10 +26,12 @@ pub const CACHE_DUMP_INTERVAL: usize = 1000;
 pub const CACHE_CLEANUP_INTERVAL: usize = 1000;
 pub const METRICS_DUMP_INTERVAL: usize = 1000;
 
-pub const DISCONNECT_COLOR: usize = 0xFF0000;
 pub const CONNECT_COLOR: usize = 0x00FF00;
+pub const DISCONNECT_COLOR: usize = 0xFF0000;
 pub const READY_COLOR: usize = 0x00FF00;
 pub const RESUME_COLOR: usize = 0x1E90FF;
+pub const JOIN_COLOR: usize = 0x00FF00;
+pub const LEAVE_COLOR: usize = 0xFF0000;
 
 pub fn guild_key(guild: GuildId) -> String {
     format!("{}:{}", GUILD_KEY, guild)
