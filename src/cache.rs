@@ -391,7 +391,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             guild.voice_states = HashMap::new();
             guild.members = HashMap::new();
             guild.presences = HashMap::new();
-            set(conn, guild_key(data.id), &data).await?;
+            set(conn, guild_key(data.id), &guild).await?;
         }
         Event::GuildDelete(data) => {
             old = clear_guild(conn, data.id).await?;
