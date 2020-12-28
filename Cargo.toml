@@ -1,6 +1,6 @@
 [package]
 name = "twilight-dispatch"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["CHamburr <hi@chamburr.xyz>"]
 edition = "2018"
 
