@@ -207,7 +207,7 @@ pub async fn log_discord_guild(
     let client = cluster.config().http_client();
 
     let message = client
-        .create_message(ChannelId(CONFIG.log_channel))
+        .create_message(ChannelId(CONFIG.log_guild_channel))
         .embed(Embed {
             author: None,
             color: Some(color as u32),
