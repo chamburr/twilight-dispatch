@@ -54,7 +54,7 @@ pub async fn outgoing(
                     info!(
                         "[Shard {}] Resumed (session: {})",
                         shard,
-                        info.session_id().unwrap()
+                        info.session_id().unwrap_or_default()
                     );
                 } else {
                     info!("[Shard {}] Resumed", shard);
@@ -76,7 +76,7 @@ pub async fn outgoing(
                 info!(
                     "[Shard {}] Connecting (url: {})",
                     shard,
-                    data.gateway.split('#').next().unwrap()
+                    data.gateway
                 );
                 SHARD_EVENTS.with_label_values(&["Connecting"]).inc();
             }
@@ -256,7 +256,7 @@ pub async fn incoming(clusters: Vec<Cluster>, mut consumer: Consumer) {
                             match payload.op {
                                 DeliveryOpcode::Send => {
                                     if let Err(err) =
-                                        cluster.command(payload.shard, &payload.data.unwrap()).await
+                                        cluster.command(payload.shard, &payload.data.unwrap_or_default()).await
                                     {
                                         warn!("Failed to send gateway command: {:?}", err);
                                     }
