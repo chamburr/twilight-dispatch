@@ -224,10 +224,12 @@ pub async fn outgoing(
                             "{} ({})",
                             guild
                                 .get("name")
-                                .unwrap_or(&json!("Unknown"))
-                                .as_str()
-                                .unwrap(),
-                            guild.get("id").unwrap_or(&json!(0)).as_u64().unwrap()
+                                .map(|name| name.as_str().unwrap())
+                                .unwrap_or("Unknown"),
+                            guild
+                                .get("id")
+                                .map(|id| id.as_str().unwrap())
+                                .unwrap_or("0")
                         ),
                     )
                     .await;
