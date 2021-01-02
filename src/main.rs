@@ -134,7 +134,7 @@ async fn real_main() -> ApiResult<()> {
     info!("Resuming {} sessions", resumes.len());
 
     cache::set(&mut conn, STARTED_KEY, &FormattedDateTime::now()).await?;
-    cache::set(&mut conn, SHARDS_KEY, &shards).await?;
+    cache::set(&mut conn, SHARDS_KEY, &CONFIG.shards_total).await?;
 
     tokio::spawn(async {
         let _ = metrics::run_server().await;
