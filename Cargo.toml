@@ -5,7 +5,7 @@ authors = ["CHamburr <hi@chamburr.xyz>"]
 edition = "2018"
 
 [dependencies]
-dotenv = { version = "0.15", default-features = false}
+dotenv = { version = "0.15", default-features = false }
 hyper = { version = "0.13", default-features = false }
 lapin = { version = "1.6", default-features = false }
 lazy_static = { version = "1.4", default-features = false }
@@ -18,26 +18,26 @@ simd-json = { version = "0.3", default-features = false }
 time = { version = "0.2", default-features = false, features = ["std"] }
 tokio = { version = "0.2", default-features = false, features = ["rt-threaded", "macros", "signal", "time"] }
 tracing = { version = "0.1", default-features = false }
-tracing-subscriber = { version = "0.2", default-features = false, features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "env-filter", "fmt"] }
 #twilight-gateway = { version = "0.2", default-features = false, features = ["rustls", "simd-json", "simd-zlib"] }
 #twilight-http = { version = "0.2", default-features = false, features = ["rustls", "simd-json"] }
 #twilight-model = { version = "0.2", default-features = false }
 
 [dependencies.twilight-gateway]
-git = "https://github.com/chamburr/twilight"
-branch = "fix-model-serialising-null"
+git = "https://github.com/twilight-rs/twilight"
+branch = "trunk"
 default-features = false
 features = ["rustls", "simd-json", "simd-zlib"]
 
 [dependencies.twilight-http]
-git = "https://github.com/chamburr/twilight"
-branch = "fix-model-serialising-null"
+git = "https://github.com/twilight-rs/twilight"
+branch = "trunk"
 default-features = false
 features = ["rustls", "simd-json"]
 
 [dependencies.twilight-model]
-git = "https://github.com/chamburr/twilight"
-branch = "fix-model-serialising-null"
+git = "https://github.com/twilight-rs/twilight"
+branch = "trunk"
 default-features = false
 
 [profile.release]
