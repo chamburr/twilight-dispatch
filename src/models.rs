@@ -109,13 +109,6 @@ pub struct PayloadInfo {
     pub op: OpCode,
     pub t: Option<String>,
     pub d: Value,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct PayloadData {
-    pub op: OpCode,
-    pub t: Option<String>,
-    pub d: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub old: Option<Value>,
 }

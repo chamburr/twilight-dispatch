@@ -1,4 +1,5 @@
-#![deny(clippy::all, nonstandard_style, rust_2018_idioms)]
+#![recursion_limit = "128"]
+#![deny(clippy::all, nonstandard_style, rust_2018_idioms, unused, warnings)]
 
 use crate::config::CONFIG;
 use crate::constants::{EXCHANGE, QUEUE_RECV, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY};
@@ -186,11 +187,11 @@ async fn real_main() -> ApiResult<()> {
 
     let mut sessions = HashMap::new();
     for cluster in clusters {
-        for (key, value) in cluster.down_resumable().iter() {
+        for (key, value) in cluster.down_resumable().into_iter() {
             sessions.insert(
-                key.to_string(),
+                key,
                 SessionInfo {
-                    session_id: value.session_id.clone(),
+                    session_id: value.session_id,
                     sequence: value.sequence,
                 },
             );

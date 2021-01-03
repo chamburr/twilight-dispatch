@@ -4,10 +4,9 @@ use crate::constants::{
     role_key, voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL, CACHE_DUMP_INTERVAL, CHANNEL_KEY,
     EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX, MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
 };
-use crate::models::{ApiResult, FormattedDateTime, SessionInfo, StatusInfo};
+use crate::models::{ApiError, ApiResult, FormattedDateTime, SessionInfo, StatusInfo};
 use crate::utils::{get_guild_shard, get_keys, to_value};
 
-use ::time::Duration;
 use redis::{AsyncCommands, FromRedisValue};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -15,13 +14,15 @@ use serde_mappable_seq::Key;
 use simd_json::owned::Value;
 use std::collections::HashMap;
 use std::hash::Hash;
-use tokio::time;
+use tokio::time::{delay_for, Duration};
 use tracing::warn;
 use twilight_gateway::Cluster;
 use twilight_model::channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel};
 use twilight_model::gateway::event::Event;
-use twilight_model::guild::{Emoji, GuildStatus, Member};
+use twilight_model::guild::{Emoji, GuildStatus, Member, Role, UnavailableGuild};
 use twilight_model::id::GuildId;
+use twilight_model::voice::VoiceState;
+use twilight_model::gateway::presence::Presence;
 
 pub async fn get<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
@@ -32,6 +33,26 @@ pub async fn get<T: DeserializeOwned>(
     Ok(res
         .map(|mut value| simd_json::from_str(value.as_mut_str()))
         .transpose()?)
+}
+
+pub async fn get_all<T: DeserializeOwned>(
+    conn: &mut redis::aio::Connection,
+    keys: &[String],
+) -> ApiResult<Vec<Option<T>>> {
+    if keys.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let res: Vec<Option<String>> = conn.get(keys).await?;
+
+    Ok(res
+        .into_iter()
+        .map(|option| {
+            option
+                .map(|mut value| simd_json::from_str(value.as_mut_str()).map_err(ApiError::from))
+                .transpose()
+        })
+        .collect::<ApiResult<Vec<Option<T>>>>()?)
 }
 
 pub async fn get_members<T: FromRedisValue>(
@@ -66,55 +87,86 @@ pub async fn set<T: Serialize>(
     key: impl ToString,
     value: &T,
 ) -> ApiResult<()> {
-    let value = simd_json::to_string(value)?;
-    conn.set(key.to_string(), value).await?;
+    set_all(conn, &[(key.to_string(), value)]).await?;
 
-    let parts = get_keys(key.to_string());
+    Ok(())
+}
 
-    if parts.len() > 1 {
-        let _: () = conn
-            .sadd(format!("{}{}", parts[0], KEYS_SUFFIX), key.to_string())
-            .await?;
+pub async fn set_all<T: Serialize>(
+    conn: &mut redis::aio::Connection,
+    keys: &[(String, T)],
+) -> ApiResult<()> {
+    if keys.is_empty() {
+        return Ok(());
     }
 
-    if parts.len() > 2 {
-        if parts[0] != MESSAGE_KEY {
-            let _: () = conn
-                .sadd(
-                    format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]),
-                    key.to_string(),
-                )
-                .await?;
-        } else {
-            let _: () = conn
-                .sadd(
-                    format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]),
-                    key.to_string(),
-                )
-                .await?;
-        }
+    let mut members = HashMap::new();
+
+    let keys = keys
+        .iter()
+        .map(|(key, value)| {
+            let parts = get_keys(key);
+            if parts.len() > 1 {
+                members
+                    .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
+                    .or_insert_with(Vec::new)
+                    .push(key);
+            } else if parts.len() > 2 && parts[0] != MESSAGE_KEY {
+                members
+                    .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
+                    .or_insert_with(Vec::new)
+                    .push(key);
+            } else if parts.len() > 2 {
+                members
+                    .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
+                    .or_insert_with(Vec::new)
+                    .push(key);
+            }
+
+            simd_json::to_string(value)
+                .map(|value| (key, value))
+                .map_err(ApiError::from)
+        })
+        .collect::<ApiResult<Vec<(&String, String)>>>()?;
+
+    conn.set_multiple(keys.as_slice()).await?;
+
+    for (key, value) in members {
+        conn.sadd(key, value.as_slice()).await?;
     }
 
     Ok(())
 }
 
-pub async fn set_and_expire<T: Serialize>(
+pub async fn expire(
     conn: &mut redis::aio::Connection,
     key: impl ToString,
-    value: &T,
     expiry: u64,
 ) -> ApiResult<()> {
-    set(conn, key.to_string(), value).await?;
+    expire_all(conn, &[(key.to_string(), expiry)]).await?;
 
-    if expiry != 0 {
-        let timestamp = FormattedDateTime::now() + Duration::milliseconds(expiry as i64);
-        conn.hset(
-            EXPIRY_KEYS,
-            key.to_string(),
-            simd_json::to_string(&timestamp)?,
-        )
-        .await?;
+    Ok(())
+}
+
+pub async fn expire_all(
+    conn: &mut redis::aio::Connection,
+    keys: &[(String, u64)],
+) -> ApiResult<()> {
+    if keys.is_empty() {
+        return Ok(());
     }
+
+    let keys = keys
+        .iter()
+        .map(|(key, value)| {
+            let timestamp = FormattedDateTime::now() + time::Duration::milliseconds(*value as i64);
+            simd_json::to_string(&timestamp)
+                .map(|value| (key, value))
+                .map_err(ApiError::from)
+        })
+        .collect::<ApiResult<Vec<(&String, String)>>>()?;
+
+    conn.hset_multiple(EXPIRY_KEYS, keys.as_slice()).await?;
 
     Ok(())
 }
@@ -129,7 +181,7 @@ pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiR
     let mut all_keys = HashMap::new();
 
     for key in keys {
-        let parts = get_keys(key.to_owned());
+        let parts = get_keys(key);
 
         if parts.len() > 1 {
             all_keys
@@ -160,7 +212,7 @@ pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiR
     Ok(())
 }
 
-pub async fn del<T: ToString>(conn: &mut redis::aio::Connection, key: T) -> ApiResult<()> {
+pub async fn del(conn: &mut redis::aio::Connection, key: impl ToString) -> ApiResult<()> {
     del_all(conn, &[key.to_string()]).await?;
 
     Ok(())
@@ -169,13 +221,13 @@ pub async fn del<T: ToString>(conn: &mut redis::aio::Connection, key: T) -> ApiR
 pub async fn del_hashmap(
     conn: &mut redis::aio::Connection,
     key: impl ToString,
-    fields: &[String],
+    keys: &[String],
 ) -> ApiResult<()> {
-    if fields.is_empty() {
+    if keys.is_empty() {
         return Ok(());
     }
 
-    let _: () = conn.hdel(key.to_string(), fields).await?;
+    let _: () = conn.hdel(key.to_string(), keys).await?;
 
     Ok(())
 }
@@ -188,9 +240,9 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
         for cluster in clusters {
             let mut status: Vec<StatusInfo> = cluster
                 .info()
-                .iter()
+                .into_iter()
                 .map(|(k, v)| StatusInfo {
-                    shard: *k,
+                    shard: k,
                     status: format!("{}", v.stage()),
                     latency: v
                         .latency()
@@ -203,7 +255,7 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
                         .received()
                         .map(|value| {
                             FormattedDateTime::now()
-                                - Duration::milliseconds(value.elapsed().as_millis() as i64)
+                                - time::Duration::milliseconds(value.elapsed().as_millis() as i64)
                         })
                         .unwrap_or_else(FormattedDateTime::now),
                 })
@@ -232,7 +284,7 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
             warn!("Failed to dump gateway sessions: {:?}", err);
         }
 
-        time::delay_for(time::Duration::from_millis(CACHE_DUMP_INTERVAL as u64)).await;
+        delay_for(Duration::from_millis(CACHE_DUMP_INTERVAL as u64)).await;
     }
 }
 
@@ -268,7 +320,7 @@ pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
             }
         }
 
-        time::delay_for(time::Duration::from_millis(CACHE_CLEANUP_INTERVAL as u64)).await;
+        delay_for(Duration::from_millis(CACHE_CLEANUP_INTERVAL as u64)).await;
     }
 }
 
@@ -342,47 +394,91 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         },
         Event::GuildCreate(data) => {
             old = clear_guild(conn, data.id).await?;
-            for channel in data.channels.values() {
-                let channel = match channel.clone() {
-                    GuildChannel::Category(mut c) => {
-                        c.guild_id = Some(data.id);
-                        GuildChannel::Category(c)
-                    }
-                    GuildChannel::Text(mut c) => {
-                        c.guild_id = Some(data.id);
-                        GuildChannel::Text(c)
-                    }
-                    GuildChannel::Voice(mut c) => {
-                        c.guild_id = Some(data.id);
-                        GuildChannel::Voice(c)
-                    }
-                };
-                set(conn, channel_key(data.id, channel.id()), &channel).await?;
-            }
-            for role in data.roles.values() {
-                set(conn, role_key(data.id, role.id), &role).await?;
-            }
-            for emoji in data.emojis.values() {
-                set(conn, emoji_key(data.id, emoji.id), &emoji).await?;
-            }
-            for voice in data.voice_states.values() {
-                set(conn, voice_key(data.id, voice.user_id), &voice).await?;
-            }
+            set_all(
+                conn,
+                data.channels
+                    .values()
+                    .map(|channel| match channel.clone() {
+                        GuildChannel::Category(mut channel) => {
+                            channel.guild_id = Some(data.id);
+                            (
+                                channel_key(data.id, channel.id),
+                                GuildChannel::Category(channel),
+                            )
+                        }
+                        GuildChannel::Text(mut channel) => {
+                            channel.guild_id = Some(data.id);
+                            (
+                                channel_key(data.id, channel.id),
+                                GuildChannel::Text(channel),
+                            )
+                        }
+                        GuildChannel::Voice(mut channel) => {
+                            channel.guild_id = Some(data.id);
+                            (
+                                channel_key(data.id, channel.id),
+                                GuildChannel::Voice(channel),
+                            )
+                        }
+                    })
+                    .collect::<Vec<(String, GuildChannel)>>()
+                    .as_slice(),
+            )
+            .await?;
+            set_all(
+                conn,
+                data.roles
+                    .values()
+                    .map(|role| (role_key(data.id, role.id), role))
+                    .collect::<Vec<(String, &Role)>>()
+                    .as_slice(),
+            )
+            .await?;
+            set_all(
+                conn,
+                data.emojis
+                    .values()
+                    .map(|emoji| (emoji_key(data.id, emoji.id), emoji))
+                    .collect::<Vec<(String, &Emoji)>>()
+                    .as_slice(),
+            )
+            .await?;
+            set_all(
+                conn,
+                data.voice_states
+                    .values()
+                    .map(|voice| (voice_key(data.id, voice.user_id), voice))
+                    .collect::<Vec<(String, &VoiceState)>>()
+                    .as_slice(),
+            )
+            .await?;
             if CONFIG.state_member {
-                for member in data.members.values() {
-                    set_and_expire(
-                        conn,
-                        member_key(data.id, member.user.id),
-                        &member,
-                        CONFIG.state_member_ttl,
-                    )
-                    .await?;
-                }
+                set_all(
+                    conn,
+                    data.members
+                        .values()
+                        .map(|member| (member_key(data.id, member.user.id), member))
+                        .collect::<Vec<(String, &Member)>>()
+                        .as_slice(),
+                )
+                .await?;
+                expire_all(
+                    conn,
+                    data.members
+                        .values()
+                        .map(|member| {
+                            (member_key(data.id, member.user.id), CONFIG.state_member_ttl)
+                        })
+                        .collect::<Vec<(String, u64)>>()
+                        .as_slice(),
+                )
+                .await?;
             }
             if CONFIG.state_presence {
-                for presence in data.presences.values() {
-                    set(conn, presence_key(data.id, presence.user.key()), &presence).await?;
-                }
+                set_all(conn, data.presences.values()
+                    .map(|presence| (presence_key(data.id, presence.user.key()), presence))
+                    .collect::<Vec<(String, &Presence)>>()
+                    .as_slice()).await?;
             }
             let mut guild = data.clone();
             guild.channels = HashMap::new();
@@ -397,27 +493,40 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             old = clear_guild(conn, data.id).await?;
         }
         Event::GuildEmojisUpdate(data) => {
-            let mut emojis = vec![];
             let keys: Vec<String> = get_members(
                 conn,
                 format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, data.guild_id),
             )
             .await?;
-            for key in keys {
-                if get_keys(key.clone())[0] == EMOJI_KEY {
-                    let emoji: Option<Emoji> = get(conn, key.as_str()).await?;
-                    if let Some(emoji) = emoji {
-                        emojis.push(emoji.clone());
-                        if data.emojis.get(&emoji.id).is_none() {
-                            del(conn, key).await?;
-                        }
-                    }
-                }
-            }
+            let emoji_keys: Vec<String> = keys
+                .into_iter()
+                .filter(|key| get_keys(key)[0] == EMOJI_KEY)
+                .collect();
+            let emojis: Vec<Emoji> = get_all(conn, emoji_keys.as_slice())
+                .await?
+                .into_iter()
+                .filter_map(|emoji| emoji)
+                .collect();
+            del_all(
+                conn,
+                emojis
+                    .iter()
+                    .filter(|emoji| data.emojis.get(&emoji.id).is_none())
+                    .map(|emoji| emoji_key(data.guild_id, emoji.id))
+                    .collect::<Vec<String>>()
+                    .as_slice(),
+            )
+            .await?;
+            set_all(
+                conn,
+                data.emojis
+                    .values()
+                    .map(|emoji| (emoji_key(data.guild_id, emoji.id), emoji))
+                    .collect::<Vec<(String, &Emoji)>>()
+                    .as_slice(),
+            )
+            .await?;
             old = Some(to_value(&emojis)?);
-            for emoji in data.emojis.values() {
-                set(conn, emoji_key(data.guild_id, emoji.id), emoji).await?
-            }
         }
         Event::GuildUpdate(data) => {
             old = get(conn, guild_key(data.id)).await?;
@@ -425,10 +534,10 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         }
         Event::MemberAdd(data) => {
             if CONFIG.state_member {
-                set_and_expire(
+                set(conn, member_key(data.guild_id, data.user.id), &data).await?;
+                expire(
                     conn,
                     member_key(data.guild_id, data.user.id),
-                    &data,
                     CONFIG.state_member_ttl,
                 )
                 .await?;
@@ -454,10 +563,10 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     member.premium_since = data.premium_since.clone();
                     member.roles = data.roles.clone();
                     member.user = data.user.clone();
-                    set_and_expire(
+                    set(conn, member_key(data.guild_id, data.user.id), &member).await?;
+                    expire(
                         conn,
                         member_key(data.guild_id, data.user.id),
-                        &member,
                         CONFIG.state_member_ttl,
                     )
                     .await?;
@@ -466,23 +575,27 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         }
         Event::MemberChunk(data) => {
             if CONFIG.state_member {
-                for member in data.members.values() {
-                    set_and_expire(
-                        conn,
-                        member_key(data.guild_id, member.user.id),
-                        &member,
-                        CONFIG.state_member_ttl,
-                    )
-                    .await?;
-                }
+                set_all(conn, data
+                    .members
+                    .iter()
+                    .map(|(id, member)| (member_key(data.guild_id, *id), member))
+                    .collect::<Vec<(String, &Member)>>()
+                    .as_slice()
+                ).await?;
+                expire_all(conn, data
+                    .members
+                    .iter()
+                    .map(|(id, _)| (member_key(data.guild_id, *id), CONFIG.state_member_ttl))
+                    .collect::<Vec<(String, u64)>>().as_slice()
+                ).await?;
             }
         }
         Event::MessageCreate(data) => {
             if CONFIG.state_message {
-                set_and_expire(
+                set(conn, message_key(data.channel_id, data.id), &data).await?;
+                expire(
                     conn,
                     message_key(data.channel_id, data.id),
-                    &data,
                     CONFIG.state_message_ttl,
                 )
                 .await?;
@@ -496,15 +609,17 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         }
         Event::MessageDeleteBulk(data) => {
             if CONFIG.state_message {
-                let mut messages = vec![];
-                for id in &data.ids {
-                    let message: Option<Message> =
-                        get(conn, message_key(data.channel_id, *id)).await?;
-                    if let Some(message) = message {
-                        messages.push(message);
-                        del(conn, message_key(data.channel_id, *id)).await?;
-                    }
-                }
+                let message_keys: Vec<String> = data
+                    .ids
+                    .iter()
+                    .map(|id| message_key(data.channel_id, *id))
+                    .collect();
+                let messages: Vec<Message> = get_all(conn, message_keys.as_slice())
+                    .await?
+                    .into_iter()
+                    .filter_map(|message| message)
+                    .collect();
+                del_all(conn, message_keys.as_slice()).await?;
                 old = Some(to_value(&messages)?);
             }
         }
@@ -547,10 +662,10 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     if let Some(tts) = data.tts {
                         message.tts = tts;
                     }
-                    set_and_expire(
+                    set(conn, message_key(data.channel_id, data.id), &message).await?;
+                    expire(
                         conn,
                         message_key(data.channel_id, data.id),
-                        &message,
                         CONFIG.state_message_ttl,
                     )
                     .await?;
@@ -565,19 +680,27 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         }
         Event::Ready(data) => {
             set(conn, BOT_USER_KEY, &data.user).await?;
-            if let Some(shards) = data.shard {
-                for guild in get_members(conn, format!("{}{}", GUILD_KEY, KEYS_SUFFIX)).await? {
+            if let Some([shard, _]) = data.shard {
+                let guilds: Vec<String> = get_members(conn, format!("{}{}", GUILD_KEY, KEYS_SUFFIX)).await?;
+                for guild in guilds {
                     let id = GuildId(get_keys(guild)[1].parse()?);
-                    if get_guild_shard(id) == shards[0] && data.guilds.get(&id).is_none() {
+                    if get_guild_shard(id) == shard && data.guilds.get(&id).is_none() {
                         let _: Option<Value> = clear_guild(conn, id).await?;
                     }
                 }
             }
-            for guild in data.guilds.values() {
-                if let GuildStatus::Offline(guild) = guild {
-                    set(conn, guild_key(guild.id), guild).await?;
-                }
-            }
+            set_all(
+                conn,
+                data.guilds
+                    .values()
+                    .filter_map(|guild| match guild {
+                        GuildStatus::Online(_) => None,
+                        GuildStatus::Offline(guild) => Some((guild_key(guild.id), guild)),
+                    })
+                    .collect::<Vec<(String, &UnavailableGuild)>>()
+                    .as_slice(),
+            )
+            .await?;
         }
         Event::RoleCreate(data) => {
             set(conn, role_key(data.guild_id, data.role.id), &data.role).await?;
