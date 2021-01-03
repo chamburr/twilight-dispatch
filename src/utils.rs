@@ -250,5 +250,9 @@ where
 }
 
 pub fn get_keys(value: impl ToString) -> Vec<String> {
-    return value.to_string().split(':').map(|part| part.to_owned()).collect();
+    return value
+        .to_string()
+        .split(':')
+        .map(|part| part.to_owned())
+        .collect();
 }
