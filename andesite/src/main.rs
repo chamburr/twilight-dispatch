@@ -72,6 +72,8 @@ async fn real_main() -> ApiResult<()> {
         .add_with_resume(config.address, config.authorization, config.resume)
         .await?;
 
+    info!("Connected to andesite");
+
     cache::set(&mut conn, PLAYER_ID_KEY, &node.connection_id()).await?;
 
     let mut conn_clone = redis.get_async_connection().await?;
