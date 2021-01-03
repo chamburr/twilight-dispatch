@@ -4,7 +4,7 @@ use crate::constants::{
     CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, JOIN_COLOR, LEAVE_COLOR, READY_COLOR, RESUME_COLOR,
 };
 use crate::metrics::{GATEWAY_EVENTS, GUILD_EVENTS, SHARD_EVENTS};
-use crate::models::{DeliveryInfo, DeliveryOpcode, PayloadData, PayloadInfo};
+use crate::models::{DeliveryInfo, DeliveryOpcode, PayloadInfo};
 use crate::utils::{get_event_flags, log_discord, log_discord_guild};
 
 use lapin::options::{BasicAckOptions, BasicPublishOptions};
@@ -73,21 +73,18 @@ pub async fn outgoing(
                 SHARD_EVENTS.with_label_values(&["Connected"]).inc();
             }
             Event::ShardConnecting(data) => {
-                info!(
-                    "[Shard {}] Connecting (url: {})",
-                    shard,
-                    data.gateway
-                );
+                info!("[Shard {}] Connecting (url: {})", shard, data.gateway);
                 SHARD_EVENTS.with_label_values(&["Connecting"]).inc();
             }
             Event::ShardDisconnected(data) => {
                 if let Some(code) = data.code {
-                    if !data.reason.clone().unwrap_or_default().is_empty() {
+                    let reason = data.reason.unwrap_or_default();
+                    if !reason.is_empty() {
                         info!(
                             "[Shard {}] Disconnected (code: {}, reason: {})",
                             shard,
                             code,
-                            data.reason.clone().unwrap_or_default()
+                            reason
                         );
                     } else {
                         info!("[Shard {}] Disconnected (code: {})", shard, code);
@@ -115,8 +112,8 @@ pub async fn outgoing(
                 info!("[Shard {}] Resuming (sequence: {})", shard, data.seq);
                 SHARD_EVENTS.with_label_values(&["Resuming"]).inc();
             }
-            Event::ShardPayload(mut data) if CONFIG.state_enabled => {
-                match simd_json::from_slice::<PayloadData>(data.bytes.as_mut_slice()) {
+            Event::ShardPayload(mut data) => {
+                match simd_json::from_slice::<PayloadInfo>(data.bytes.as_mut_slice()) {
                     Ok(mut payload) => {
                         if let Some(kind) = payload.t.as_deref() {
                             GATEWAY_EVENTS
@@ -124,47 +121,6 @@ pub async fn outgoing(
                                 .inc();
 
                             payload.old = old;
-
-                            match simd_json::to_vec(&payload) {
-                                Ok(payload) => {
-                                    let result = channel
-                                        .basic_publish(
-                                            EXCHANGE,
-                                            kind,
-                                            BasicPublishOptions::default(),
-                                            payload,
-                                            BasicProperties::default(),
-                                        )
-                                        .await;
-
-                                    if let Err(err) = result {
-                                        warn!(
-                                            "[Shard {}] Failed to publish event: {:?}",
-                                            shard, err
-                                        );
-                                    }
-                                }
-                                Err(err) => {
-                                    warn!(
-                                        "[Shard {}] Failed to serialize payload: {:?}",
-                                        shard, err
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        warn!("[Shard {}] Could not decode payload: {:?}", shard, err);
-                    }
-                }
-            }
-            Event::ShardPayload(mut data) => {
-                match simd_json::from_slice::<PayloadInfo>(data.bytes.as_mut_slice()) {
-                    Ok(payload) => {
-                        if let Some(kind) = payload.t.as_deref() {
-                            GATEWAY_EVENTS
-                                .with_label_values(&[kind, shard_strings[shard as usize].as_str()])
-                                .inc();
 
                             match simd_json::to_vec(&payload) {
                                 Ok(payload) => {
@@ -255,8 +211,9 @@ pub async fn incoming(clusters: Vec<Cluster>, mut consumer: Consumer) {
                         if let Some(cluster) = cluster {
                             match payload.op {
                                 DeliveryOpcode::Send => {
-                                    if let Err(err) =
-                                        cluster.command(payload.shard, &payload.data.unwrap_or_default()).await
+                                    if let Err(err) = cluster
+                                        .command(payload.shard, &payload.data.unwrap_or_default())
+                                        .await
                                     {
                                         warn!("Failed to send gateway command: {:?}", err);
                                     }

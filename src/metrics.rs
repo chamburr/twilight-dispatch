@@ -7,8 +7,9 @@ use crate::constants::{
 use crate::models::ApiResult;
 
 use hyper::header::CONTENT_TYPE;
+use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::{Body, Method, Request, Response, StatusCode};
 use lazy_static::lazy_static;
 use prometheus::{
     register_int_counter_vec, register_int_gauge, register_int_gauge_vec, Encoder, IntCounterVec,
@@ -17,7 +18,7 @@ use prometheus::{
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
-use tokio::time;
+use tokio::time::{delay_for, Duration};
 use tracing::warn;
 use twilight_gateway::shard::Stage;
 use twilight_gateway::Cluster;
@@ -198,6 +199,6 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
             }
         }
 
-        time::delay_for(time::Duration::from_millis(METRICS_DUMP_INTERVAL as u64)).await;
+        delay_for(Duration::from_millis(METRICS_DUMP_INTERVAL as u64)).await;
     }
 }

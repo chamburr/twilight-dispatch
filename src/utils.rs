@@ -105,12 +105,12 @@ pub async fn get_resume_sessions(
         cache::get(conn, SESSIONS_KEY).await?.unwrap_or_default();
 
     Ok(sessions
-        .iter()
+        .into_iter()
         .map(|(k, v)| {
             (
                 k.parse().unwrap(),
                 ResumeSession {
-                    session_id: v.session_id.clone(),
+                    session_id: v.session_id,
                     sequence: v.sequence,
                 },
             )
@@ -182,7 +182,7 @@ pub async fn log_discord(cluster: &Cluster, color: usize, message: impl Into<Str
             fields: vec![],
             footer: None,
             image: None,
-            kind: "".to_string(),
+            kind: "".to_owned(),
             provider: None,
             thumbnail: None,
             timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
@@ -215,7 +215,7 @@ pub async fn log_discord_guild(
             fields: vec![],
             footer: None,
             image: None,
-            kind: "".to_string(),
+            kind: "".to_owned(),
             provider: None,
             thumbnail: None,
             timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
@@ -249,6 +249,6 @@ where
     Ok(result)
 }
 
-pub fn get_keys(value: String) -> Vec<String> {
-    return value.split(':').map(|part| part.to_owned()).collect();
+pub fn get_keys(value: impl ToString) -> Vec<String> {
+    return value.to_string().split(':').map(|part| part.to_owned()).collect();
 }
