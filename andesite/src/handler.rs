@@ -1,13 +1,16 @@
 use crate::cache;
 use crate::constants::EXCHANGE;
 use crate::metrics::PLAYER_EVENTS;
+use crate::models::PayloadInfo;
 
 use futures::channel::mpsc::UnboundedReceiver;
 use lapin::options::{BasicAckOptions, BasicPublishOptions};
 use lapin::{BasicProperties, Consumer};
 use tokio::stream::StreamExt;
 use tracing::warn;
-use twilight_andesite::model::{IncomingEvent, OutgoingEvent};
+use twilight_andesite::model::{
+    Destroy, GetPlayer, IncomingEvent, OutgoingEvent, Play, Stop, Update, VoiceUpdate,
+};
 use twilight_andesite::node::Node;
 
 pub async fn outgoing(
@@ -63,7 +66,24 @@ pub async fn incoming(node: &Node, mut consumer: Consumer) {
                 let _ = channel
                     .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
                     .await;
-                match simd_json::from_slice::<OutgoingEvent>(delivery.data.as_mut_slice()) {
+                let mut data = delivery.data.clone();
+                match simd_json::from_slice::<PayloadInfo>(delivery.data.as_mut_slice()).and_then(
+                    |info| match info.op.as_str() {
+                        "voiceUpdate" => simd_json::from_slice::<VoiceUpdate>(data.as_mut_slice())
+                            .map(OutgoingEvent::from),
+                        "getPlayer" => simd_json::from_slice::<GetPlayer>(data.as_mut_slice())
+                            .map(OutgoingEvent::from),
+                        "play" => simd_json::from_slice::<Play>(data.as_mut_slice())
+                            .map(OutgoingEvent::from),
+                        "stop" => simd_json::from_slice::<Stop>(data.as_mut_slice())
+                            .map(OutgoingEvent::from),
+                        "update" => simd_json::from_slice::<Update>(data.as_mut_slice())
+                            .map(OutgoingEvent::from),
+                        "destroy" => simd_json::from_slice::<Destroy>(data.as_mut_slice())
+                            .map(OutgoingEvent::from),
+                        _ => simd_json::from_slice::<OutgoingEvent>(data.as_mut_slice()),
+                    },
+                ) {
                     Ok(payload) => {
                         if let Err(err) = node.send(payload) {
                             warn!("Failed to send outgoing event: {:?}", err);
