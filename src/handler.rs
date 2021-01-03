@@ -82,9 +82,7 @@ pub async fn outgoing(
                     if !reason.is_empty() {
                         info!(
                             "[Shard {}] Disconnected (code: {}, reason: {})",
-                            shard,
-                            code,
-                            reason
+                            shard, code, reason
                         );
                     } else {
                         info!("[Shard {}] Disconnected (code: {})", shard, code);

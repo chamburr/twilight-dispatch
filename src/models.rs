@@ -19,7 +19,12 @@ use std::ops::{Add, Sub};
 use time::{Duration, OffsetDateTime};
 use twilight_gateway::cluster::ClusterStartError;
 use twilight_gateway::shard::LargeThresholdError;
+use twilight_model::channel::GuildChannel;
+use twilight_model::gateway::payload::GuildCreate;
+use twilight_model::gateway::presence::Presence;
 use twilight_model::gateway::OpCode;
+use twilight_model::guild::{Emoji, Member, Role};
+use twilight_model::voice::VoiceState;
 
 #[derive(Debug, Clone)]
 pub struct FormattedDateTime(OffsetDateTime);
@@ -125,6 +130,18 @@ pub struct DeliveryInfo {
     pub op: DeliveryOpcode,
     pub shard: u64,
     pub data: Option<Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum GuildItem {
+    Guild(Box<GuildCreate>),
+    Channel(GuildChannel),
+    Role(Role),
+    Emoji(Emoji),
+    Voice(VoiceState),
+    Member(Member),
+    Presence(Presence),
 }
 
 pub type ApiResult<T> = Result<T, ApiError>;
