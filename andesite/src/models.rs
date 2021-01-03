@@ -14,7 +14,12 @@ use twilight_andesite::model::Filters;
 use twilight_andesite::node::NodeError;
 use twilight_model::id::GuildId;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PayloadInfo {
+    pub op: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Player {
     pub guild_id: GuildId,
     pub time: i64,
