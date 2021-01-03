@@ -17,7 +17,7 @@ serde = { version = "1.0", default-features = false }
 simd-json = { version = "0.3", default-features = false, features = ["serde_impl"] }
 tokio = { version = "0.2", default-features = false, features = ["rt-threaded", "macros"] }
 tracing = { version = "0.1", default-features = false }
-tracing-subscriber = { version = "0.2", default-features = false, features = ["fmt"] }
+tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "fmt"] }
 twilight-model = { version = "0.2", default-features = false }
 
 [dependencies.twilight-andesite]
