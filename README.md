@@ -113,9 +113,9 @@ These are the steps to installing and running the service.
 
 ### Prerequisites
 
--   Rust: https://www.rust-lang.org/tools/install
--   RabbitMQ: https://www.rabbitmq.com/download.html
--   Redis: https://redis.io/download
+-   [RabbitMQ](https://www.rabbitmq.com/download.html)
+-   [Redis](https://redis.io/download)
+-   [Rust](https://www.rust-lang.org/tools/install)
 
 ### Configuration
 
