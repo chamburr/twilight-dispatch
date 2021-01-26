@@ -1,30 +1,27 @@
-use hyper::http::Error as HyperHTTPError;
-use hyper::Error as HyperError;
+use hyper::{http::Error as HyperHTTPError, Error as HyperError};
 use lapin::Error as LapinError;
 use prometheus::Error as PrometheusError;
 use redis::RedisError;
-use serde::de::Error as SerdeDeError;
-use serde::export::Formatter;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de::Error as SerdeDeError, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use simd_json::owned::Value;
-use simd_json::Error as SimdJsonError;
-use std::env::VarError;
-use std::error::Error;
-use std::fmt::{self, Display};
-use std::io::Error as IoError;
-use std::net::AddrParseError;
-use std::num::ParseIntError;
-use std::ops::{Add, Sub};
+use simd_json::{owned::Value, Error as SimdJsonError};
+use std::{
+    env::VarError,
+    error::Error,
+    fmt::{self, Display, Formatter},
+    io::Error as IoError,
+    net::AddrParseError,
+    num::ParseIntError,
+    ops::{Add, Sub},
+};
 use time::{Duration, OffsetDateTime};
-use twilight_gateway::cluster::ClusterStartError;
-use twilight_gateway::shard::LargeThresholdError;
-use twilight_model::channel::GuildChannel;
-use twilight_model::gateway::payload::GuildCreate;
-use twilight_model::gateway::presence::Presence;
-use twilight_model::gateway::OpCode;
-use twilight_model::guild::{Emoji, Member, Role};
-use twilight_model::voice::VoiceState;
+use twilight_gateway::{cluster::ClusterStartError, shard::LargeThresholdError};
+use twilight_model::{
+    channel::GuildChannel,
+    gateway::{payload::GuildCreate, presence::Presence, OpCode},
+    guild::{Emoji, Member, Role},
+    voice::VoiceState,
+};
 
 #[derive(Debug, Clone)]
 pub struct FormattedDateTime(OffsetDateTime);

@@ -1,23 +1,26 @@
 #![recursion_limit = "128"]
 #![deny(clippy::all, nonstandard_style, rust_2018_idioms, unused, warnings)]
 
-use crate::config::CONFIG;
-use crate::constants::{EXCHANGE, QUEUE_RECV, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY};
-use crate::models::{ApiResult, FormattedDateTime, SessionInfo};
-use crate::utils::{get_clusters, get_queue, get_resume_sessions, get_shards};
+use crate::{
+    config::CONFIG,
+    constants::{EXCHANGE, QUEUE_RECV, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY},
+    models::{ApiResult, FormattedDateTime, SessionInfo},
+    utils::{get_clusters, get_queue, get_resume_sessions, get_shards},
+};
 
 use dotenv::dotenv;
-use lapin::options::{
-    BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions,
+use lapin::{
+    options::{BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions},
+    types::FieldTable,
+    ExchangeKind,
 };
-use lapin::types::FieldTable;
-use lapin::ExchangeKind;
 use std::collections::HashMap;
-use tokio::join;
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::{
+    join,
+    signal::unix::{signal, SignalKind},
+};
 use tracing::{error, info};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod cache;
 mod config;
