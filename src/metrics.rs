@@ -1,27 +1,32 @@
-use crate::cache;
-use crate::config::CONFIG;
-use crate::constants::{
-    CHANNEL_KEY, EMOJI_KEY, GUILD_KEY, KEYS_SUFFIX, MEMBER_KEY, MESSAGE_KEY, METRICS_DUMP_INTERVAL,
-    PRESENCE_KEY, ROLE_KEY, VOICE_KEY,
+use crate::{
+    cache,
+    config::CONFIG,
+    constants::{
+        CHANNEL_KEY, EMOJI_KEY, GUILD_KEY, KEYS_SUFFIX, MEMBER_KEY, MESSAGE_KEY,
+        METRICS_DUMP_INTERVAL, PRESENCE_KEY, ROLE_KEY, VOICE_KEY,
+    },
+    models::ApiResult,
 };
-use crate::models::ApiResult;
 
-use hyper::header::CONTENT_TYPE;
-use hyper::server::Server;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, StatusCode};
+use hyper::{
+    header::CONTENT_TYPE,
+    server::Server,
+    service::{make_service_fn, service_fn},
+    Body, Method, Request, Response, StatusCode,
+};
 use lazy_static::lazy_static;
 use prometheus::{
     register_int_counter_vec, register_int_gauge, register_int_gauge_vec, Encoder, IntCounterVec,
     IntGauge, IntGaugeVec, TextEncoder,
 };
-use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
-use std::str::FromStr;
-use tokio::time::{delay_for, Duration};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
+use tokio::time::{sleep, Duration};
 use tracing::warn;
-use twilight_gateway::shard::Stage;
-use twilight_gateway::Cluster;
+use twilight_gateway::{shard::Stage, Cluster};
 
 lazy_static! {
     pub static ref GATEWAY_EVENTS: IntCounterVec = register_int_counter_vec!(
@@ -199,6 +204,6 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
             }
         }
 
-        delay_for(Duration::from_millis(METRICS_DUMP_INTERVAL as u64)).await;
+        sleep(Duration::from_millis(METRICS_DUMP_INTERVAL as u64)).await;
     }
 }

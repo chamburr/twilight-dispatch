@@ -1,17 +1,21 @@
-use crate::cache;
-use crate::config::CONFIG;
-use crate::constants::{
-    CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, JOIN_COLOR, LEAVE_COLOR, READY_COLOR, RESUME_COLOR,
+use crate::{
+    cache,
+    config::CONFIG,
+    constants::{
+        CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, JOIN_COLOR, LEAVE_COLOR, READY_COLOR,
+        RESUME_COLOR,
+    },
+    metrics::{GATEWAY_EVENTS, GUILD_EVENTS, SHARD_EVENTS},
+    models::{DeliveryInfo, DeliveryOpcode, PayloadInfo},
+    utils::{get_event_flags, log_discord, log_discord_guild},
 };
-use crate::metrics::{GATEWAY_EVENTS, GUILD_EVENTS, SHARD_EVENTS};
-use crate::models::{DeliveryInfo, DeliveryOpcode, PayloadInfo};
-use crate::utils::{get_event_flags, log_discord, log_discord_guild};
 
-use lapin::options::{BasicAckOptions, BasicPublishOptions};
-use lapin::{BasicProperties, Consumer};
-use simd_json::json;
-use simd_json::Value;
-use tokio::stream::StreamExt;
+use futures_util::StreamExt;
+use lapin::{
+    options::{BasicAckOptions, BasicPublishOptions},
+    BasicProperties, Consumer,
+};
+use simd_json::{json, Value};
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
