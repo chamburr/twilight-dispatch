@@ -1,14 +1,14 @@
 #![deny(clippy::all, nonstandard_style, rust_2018_idioms)]
 
-use crate::config::CONFIG;
-use crate::constants::{EXCHANGE, PLAYER_ID_KEY, QUEUE_RECV, QUEUE_SEND};
-use crate::models::ApiResult;
-use crate::utils::{exchange_declare, get_node_config, queue_bind, queue_declare};
+use crate::{
+    config::CONFIG,
+    constants::{EXCHANGE, PLAYER_ID_KEY, QUEUE_RECV, QUEUE_SEND},
+    models::ApiResult,
+    utils::{exchange_declare, get_node_config, queue_bind, queue_declare},
+};
 
 use dotenv::dotenv;
-use lapin::options::BasicConsumeOptions;
-use lapin::types::FieldTable;
-use lapin::ExchangeKind;
+use lapin::{options::BasicConsumeOptions, types::FieldTable, ExchangeKind};
 use tracing::{error, info};
 use twilight_andesite::Lavalink;
 use twilight_model::id::UserId;

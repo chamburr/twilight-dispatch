@@ -1,13 +1,16 @@
-use crate::config::CONFIG;
-use crate::models::ApiResult;
+use crate::{config::CONFIG, models::ApiResult};
 
-use hyper::header::CONTENT_TYPE;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::{
+    header::CONTENT_TYPE,
+    service::{make_service_fn, service_fn},
+    Body, Method, Request, Response, Server, StatusCode,
+};
 use lazy_static::lazy_static;
 use prometheus::{register_int_counter_vec, Encoder, IntCounterVec, TextEncoder};
-use std::net::{IpAddr, SocketAddr};
-use std::str::FromStr;
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
 
 lazy_static! {
     pub static ref PLAYER_EVENTS: IntCounterVec = register_int_counter_vec!(
