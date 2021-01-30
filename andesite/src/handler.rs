@@ -1,17 +1,15 @@
-use crate::cache;
-use crate::constants::EXCHANGE;
-use crate::metrics::PLAYER_EVENTS;
-use crate::models::PayloadInfo;
+use crate::{cache, constants::EXCHANGE, metrics::PLAYER_EVENTS, models::PayloadInfo};
 
-use futures::channel::mpsc::UnboundedReceiver;
-use lapin::options::{BasicAckOptions, BasicPublishOptions};
-use lapin::{BasicProperties, Consumer};
-use tokio::stream::StreamExt;
-use tracing::warn;
-use twilight_andesite::model::{
-    Destroy, GetPlayer, IncomingEvent, OutgoingEvent, Play, Stop, Update, VoiceUpdate,
+use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
+use lapin::{
+    options::{BasicAckOptions, BasicPublishOptions},
+    BasicProperties, Consumer,
 };
-use twilight_andesite::node::Node;
+use tracing::warn;
+use twilight_andesite::{
+    model::{Destroy, GetPlayer, IncomingEvent, OutgoingEvent, Play, Stop, Update, VoiceUpdate},
+    node::Node,
+};
 
 pub async fn outgoing(
     conn: &mut redis::aio::Connection,

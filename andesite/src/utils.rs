@@ -1,16 +1,20 @@
-use crate::cache;
-use crate::config::CONFIG;
-use crate::constants::{PLAYER_BUFFER, PLAYER_ID_KEY};
-use crate::models::ApiResult;
+use crate::{
+    cache,
+    config::CONFIG,
+    constants::{PLAYER_BUFFER, PLAYER_ID_KEY},
+    models::ApiResult,
+};
 
-use lapin::options::{ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions};
-use lapin::types::FieldTable;
-use lapin::ExchangeKind;
-use std::convert::TryInto;
-use std::net::SocketAddr;
-use std::str::FromStr;
-use twilight_andesite::http::Track;
-use twilight_andesite::node::{NodeConfig, Resume};
+use lapin::{
+    options::{ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions},
+    types::FieldTable,
+    ExchangeKind,
+};
+use std::{convert::TryInto, net::SocketAddr, str::FromStr};
+use twilight_andesite::{
+    http::Track,
+    node::{NodeConfig, Resume},
+};
 use twilight_model::id::UserId;
 
 pub async fn exchange_declare(

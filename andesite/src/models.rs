@@ -1,17 +1,17 @@
-use hyper::http::Error as HyperHTTPError;
-use hyper::Error as HyperError;
+use fmt::Formatter;
+use hyper::{http::Error as HyperHTTPError, Error as HyperError};
 use lapin::Error as LapinError;
 use prometheus::Error as PrometheusError;
 use redis::RedisError;
 use reqwest::Error as ReqwestError;
-use serde::export::Formatter;
 use serde::{Deserialize, Serialize};
 use simd_json::Error as SimdJsonError;
-use std::error::Error;
-use std::fmt::{self, Display};
-use std::net::AddrParseError;
-use twilight_andesite::model::Filters;
-use twilight_andesite::node::NodeError;
+use std::{
+    error::Error,
+    fmt::{self, Display},
+    net::AddrParseError,
+};
+use twilight_andesite::{model::Filters, node::NodeError};
 use twilight_model::id::GuildId;
 
 #[derive(Debug, Deserialize, Serialize)]

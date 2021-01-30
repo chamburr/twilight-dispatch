@@ -1,11 +1,12 @@
-use crate::constants::{player_key, PLAYER_EXPIRY, PLAYER_STATS_KEY};
-use crate::metrics::{PLAYED_TRACKS, VOICE_CLOSES};
-use crate::models::{ApiResult, Player};
-use crate::utils::decode_track;
+use crate::{
+    constants::{player_key, PLAYER_EXPIRY, PLAYER_STATS_KEY},
+    metrics::{PLAYED_TRACKS, VOICE_CLOSES},
+    models::{ApiResult, Player},
+    utils::decode_track,
+};
 
 use redis::AsyncCommands;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use std::time::Duration;
 use tracing::warn;
 use twilight_andesite::model::IncomingEvent;
