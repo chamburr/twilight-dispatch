@@ -23,6 +23,9 @@ twilight-gateway = { version = "0.3", default-features = false, features = ["rus
 twilight-http = { version = "0.3", default-features = false, features = ["rustls", "simd-json"] }
 twilight-model = { version = "0.3", default-features = false }
 
+# Mitigate https://github.com/bitvecto-rs/bitvec/issues/105
+funty = "=1.1.0"
+
 [profile.release]
 codegen-units = 1
 debug = false
