@@ -7,7 +7,7 @@ use crate::{
         MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
     },
     models::{ApiError, ApiResult, FormattedDateTime, GuildItem, SessionInfo, StatusInfo},
-    utils::{get_guild_shard, get_guild_status_id, get_keys, get_user_id, to_value},
+    utils::{get_guild_shard, get_keys, get_user_id, to_value},
 };
 
 use redis::{AsyncCommands, FromRedisValue};
@@ -18,9 +18,9 @@ use tokio::time::{sleep, Duration};
 use tracing::warn;
 use twilight_gateway::Cluster;
 use twilight_model::{
-    channel::{message::Mention, Channel, GuildChannel, Message, PrivateChannel, TextChannel},
+    channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel},
     gateway::event::Event,
-    guild::{Emoji, GuildStatus, Member, UnavailableGuild},
+    guild::{Emoji, Member, UnavailableGuild},
     id::GuildId,
 };
 
@@ -621,18 +621,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         message.mention_roles = mention_roles.clone();
                     }
                     if let Some(mentions) = &data.mentions {
-                        message.mentions = mentions
-                            .iter()
-                            .map(|user| Mention {
-                                avatar: user.avatar.clone(),
-                                bot: user.bot,
-                                discriminator: user.discriminator.clone(),
-                                id: user.id,
-                                member: None,
-                                name: user.name.clone(),
-                                public_flags: user.public_flags.unwrap(), // TODO
-                            })
-                            .collect();
+                        message.mentions = mentions.clone();
                     }
                     if let Some(pinned) = data.pinned {
                         message.pinned = pinned;
@@ -671,9 +660,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     get_members(conn, format!("{}{}", GUILD_KEY, KEYS_SUFFIX)).await?;
                 for guild in guilds {
                     let id = GuildId(get_keys(guild)[1].parse()?);
-                    if get_guild_shard(id) == shard
-                        && !data.guilds.iter().any(|g| get_guild_status_id(g) == id)
-                    {
+                    if get_guild_shard(id) == shard && !data.guilds.iter().any(|g| g.id == id) {
                         let _: Option<Value> = clear_guild(conn, id).await?;
                     }
                 }
@@ -682,10 +669,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 conn,
                 data.guilds
                     .iter()
-                    .filter_map(|guild| match guild {
-                        GuildStatus::Online(_) => None,
-                        GuildStatus::Offline(guild) => Some((guild_key(guild.id), guild)),
-                    })
+                    .map(|guild| (guild_key(guild.id), guild))
                     .collect::<Vec<(String, &UnavailableGuild)>>()
                     .as_slice(),
             )
