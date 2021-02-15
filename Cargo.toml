@@ -1,6 +1,6 @@
 [package]
 name = "twilight-dispatch"
-version = "0.2.3"
+version = "0.3.0"
 authors = ["CHamburr <hi@chamburr.xyz>"]
 edition = "2018"
 
@@ -16,7 +16,7 @@ serde = { version = "1.0", default-features = false }
 serde_repr = { version = "0.1", default-features = false }
 simd-json = { version = "0.3", default-features = false }
 time = { version = "0.2", default-features = false, features = ["std"] }
-tokio = { version = "1.1", default-features = false, features = ["rt-multi-thread", "macros", "signal", "time"] }
+tokio = { version = "1.2", default-features = false, features = ["rt-multi-thread", "macros", "signal", "time"] }
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "env-filter", "fmt"] }
 twilight-gateway = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false, features = ["rustls", "simd-json", "simd-zlib"] }
