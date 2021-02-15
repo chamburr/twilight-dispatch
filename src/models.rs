@@ -154,7 +154,7 @@ pub enum ApiError {
     ClusterStartError(ClusterStartError),
     LargeThresholdError(LargeThresholdError),
     HyperError(HyperError),
-    HyperHTTPError(HyperHTTPError),
+    HyperHttpError(HyperHTTPError),
     AddrParseError(AddrParseError),
     PrometheusError(PrometheusError),
     IoError(IoError),
@@ -224,7 +224,7 @@ impl From<HyperError> for ApiError {
 
 impl From<HyperHTTPError> for ApiError {
     fn from(err: HyperHTTPError) -> Self {
-        Self::HyperHTTPError(err)
+        Self::HyperHttpError(err)
     }
 }
 

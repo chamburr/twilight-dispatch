@@ -23,7 +23,6 @@ use twilight_model::{
         payload::update_status::UpdateStatusInfo,
         presence::{Activity, UserOrId},
     },
-    guild::GuildStatus,
     id::{ChannelId, GuildId, UserId},
 };
 
@@ -32,14 +31,6 @@ pub fn get_user_id(user: &UserOrId) -> UserId {
     match user {
         UserOrId::User(u) => u.id,
         UserOrId::UserId { id } => *id,
-    }
-}
-
-#[inline]
-pub fn get_guild_status_id(guild_status: &GuildStatus) -> GuildId {
-    match guild_status {
-        GuildStatus::Online(g) => g.id,
-        GuildStatus::Offline(g) => g.id,
     }
 }
 
