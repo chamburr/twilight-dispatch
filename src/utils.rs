@@ -1,23 +1,38 @@
-use crate::cache;
-use crate::config::CONFIG;
-use crate::constants::{SESSIONS_KEY, SHARDS_KEY};
-use crate::models::{ApiResult, SessionInfo};
+use crate::{
+    cache,
+    config::CONFIG,
+    constants::{SESSIONS_KEY, SHARDS_KEY},
+    models::{ApiResult, SessionInfo},
+};
 
 use serde::Serialize;
 use simd_json::owned::Value;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use time::{Format, OffsetDateTime};
 use tracing::warn;
-use twilight_gateway::cluster::ShardScheme;
-use twilight_gateway::queue::{LargeBotQueue, LocalQueue, Queue};
-use twilight_gateway::shard::ResumeSession;
-use twilight_gateway::{Cluster, EventTypeFlags, Intents};
+use twilight_gateway::{
+    cluster::ShardScheme,
+    queue::{LargeBotQueue, LocalQueue, Queue},
+    shard::ResumeSession,
+    Cluster, EventTypeFlags, Intents,
+};
 use twilight_http::Client;
-use twilight_model::channel::embed::Embed;
-use twilight_model::gateway::payload::update_status::UpdateStatusInfo;
-use twilight_model::gateway::presence::Activity;
-use twilight_model::id::{ChannelId, GuildId};
+use twilight_model::{
+    channel::embed::Embed,
+    gateway::{
+        payload::update_status::UpdateStatusInfo,
+        presence::{Activity, UserOrId},
+    },
+    id::{ChannelId, GuildId, UserId},
+};
+
+#[inline]
+pub fn get_user_id(user: &UserOrId) -> UserId {
+    match user {
+        UserOrId::User(u) => u.id,
+        UserOrId::UserId { id } => *id,
+    }
+}
 
 pub async fn get_clusters(
     resumes: HashMap<u64, ResumeSession>,
