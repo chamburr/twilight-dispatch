@@ -1,26 +1,28 @@
-use crate::config::CONFIG;
-use crate::constants::{
-    channel_key, emoji_key, guild_key, member_key, message_key, presence_key, private_channel_key,
-    role_key, voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL, CACHE_DUMP_INTERVAL, CHANNEL_KEY,
-    EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX, MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
+use crate::{
+    config::CONFIG,
+    constants::{
+        channel_key, emoji_key, guild_key, member_key, message_key, presence_key,
+        private_channel_key, role_key, voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL,
+        CACHE_DUMP_INTERVAL, CHANNEL_KEY, EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX,
+        MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
+    },
+    models::{ApiError, ApiResult, FormattedDateTime, GuildItem, SessionInfo, StatusInfo},
+    utils::{get_guild_shard, get_keys, get_user_id, to_value},
 };
-use crate::models::{ApiError, ApiResult, FormattedDateTime, GuildItem, SessionInfo, StatusInfo};
-use crate::utils::{get_guild_shard, get_keys, to_value};
 
 use redis::{AsyncCommands, FromRedisValue};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use serde_mappable_seq::Key;
+use serde::{de::DeserializeOwned, Serialize};
 use simd_json::owned::Value;
-use std::collections::HashMap;
-use std::hash::Hash;
-use tokio::time::{delay_for, Duration};
+use std::{collections::HashMap, hash::Hash};
+use tokio::time::{sleep, Duration};
 use tracing::warn;
 use twilight_gateway::Cluster;
-use twilight_model::channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel};
-use twilight_model::gateway::event::Event;
-use twilight_model::guild::{Emoji, GuildStatus, Member, UnavailableGuild};
-use twilight_model::id::GuildId;
+use twilight_model::{
+    channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel},
+    gateway::event::Event,
+    guild::{Emoji, Member, UnavailableGuild},
+    id::GuildId,
+};
 
 pub async fn get<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
@@ -282,7 +284,7 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
             warn!("Failed to dump gateway sessions: {:?}", err);
         }
 
-        delay_for(Duration::from_millis(CACHE_DUMP_INTERVAL as u64)).await;
+        sleep(Duration::from_millis(CACHE_DUMP_INTERVAL as u64)).await;
     }
 }
 
@@ -318,7 +320,7 @@ pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
             }
         }
 
-        delay_for(Duration::from_millis(CACHE_CLEANUP_INTERVAL as u64)).await;
+        sleep(Duration::from_millis(CACHE_CLEANUP_INTERVAL as u64)).await;
     }
 }
 
@@ -394,7 +396,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             old = clear_guild(conn, data.id).await?;
             let mut items = vec![];
             let mut guild = data.clone();
-            for (id, mut channel) in guild.channels.drain() {
+            for mut channel in guild.channels.drain(..) {
                 match &mut channel {
                     GuildChannel::Category(channel) => {
                         channel.guild_id = Some(data.id);
@@ -406,23 +408,30 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         channel.guild_id = Some(data.id);
                     }
                 }
-                items.push((channel_key(data.id, id), GuildItem::Channel(channel)));
+                items.push((
+                    channel_key(data.id, channel.id()),
+                    GuildItem::Channel(channel),
+                ));
             }
-            for (id, role) in guild.roles.drain() {
-                items.push((role_key(data.id, id), GuildItem::Role(role)));
+            for role in guild.roles.drain(..) {
+                items.push((role_key(data.id, role.id), GuildItem::Role(role)));
             }
-            for (id, emoji) in guild.emojis.drain() {
-                items.push((emoji_key(data.id, id), GuildItem::Emoji(emoji)));
+            for emoji in guild.emojis.drain(..) {
+                items.push((emoji_key(data.id, emoji.id), GuildItem::Emoji(emoji)));
             }
-            for (id, voice) in guild.voice_states.drain() {
-                items.push((voice_key(data.id, id), GuildItem::Voice(voice)));
+            for voice in guild.voice_states.drain(..) {
+                items.push((voice_key(data.id, voice.user_id), GuildItem::Voice(voice)));
             }
-            for (id, member) in guild.members.drain() {
+            for member in guild.members.drain(..) {
                 if CONFIG.state_member {
-                    items.push((member_key(data.id, id), GuildItem::Member(member)));
+                    items.push((
+                        member_key(data.id, member.user.id),
+                        GuildItem::Member(member),
+                    ));
                 }
             }
-            for (id, presence) in guild.presences.drain() {
+            for presence in guild.presences.drain(..) {
+                let id = get_user_id(&presence.user);
                 if CONFIG.state_presence {
                     items.push((presence_key(data.id, id), GuildItem::Presence(presence)));
                 }
@@ -433,8 +442,10 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 expire_all(
                     conn,
                     data.members
-                        .keys()
-                        .map(|id| (member_key(data.id, *id), CONFIG.state_member_ttl))
+                        .iter()
+                        .map(|member| {
+                            (member_key(data.id, member.user.id), CONFIG.state_member_ttl)
+                        })
                         .collect::<Vec<(String, u64)>>()
                         .as_slice(),
                 )
@@ -463,7 +474,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 conn,
                 emojis
                     .iter()
-                    .filter(|emoji| data.emojis.get(&emoji.id).is_none())
+                    .filter(|emoji| !data.emojis.iter().any(|e| e.id == emoji.id))
                     .map(|emoji| emoji_key(data.guild_id, emoji.id))
                     .collect::<Vec<String>>()
                     .as_slice(),
@@ -472,7 +483,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             set_all(
                 conn,
                 data.emojis
-                    .values()
+                    .iter()
                     .map(|emoji| (emoji_key(data.guild_id, emoji.id), emoji))
                     .collect::<Vec<(String, &Emoji)>>()
                     .as_slice(),
@@ -531,7 +542,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     conn,
                     data.members
                         .iter()
-                        .map(|(id, member)| (member_key(data.guild_id, *id), member))
+                        .map(|member| (member_key(data.guild_id, member.user.id), member))
                         .collect::<Vec<(String, &Member)>>()
                         .as_slice(),
                 )
@@ -539,8 +550,13 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 expire_all(
                     conn,
                     data.members
-                        .keys()
-                        .map(|id| (member_key(data.guild_id, *id), CONFIG.state_member_ttl))
+                        .iter()
+                        .map(|member| {
+                            (
+                                member_key(data.guild_id, member.user.id),
+                                CONFIG.state_member_ttl,
+                            )
+                        })
                         .collect::<Vec<(String, u64)>>()
                         .as_slice(),
                 )
@@ -605,10 +621,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                         message.mention_roles = mention_roles.clone();
                     }
                     if let Some(mentions) = &data.mentions {
-                        message.mentions = mentions
-                            .iter()
-                            .map(|user| (user.id, user.clone()))
-                            .collect();
+                        message.mentions = mentions.clone();
                     }
                     if let Some(pinned) = data.pinned {
                         message.pinned = pinned;
@@ -631,8 +644,13 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
         }
         Event::PresenceUpdate(data) => {
             if CONFIG.state_presence {
-                old = get(conn, presence_key(data.guild_id, data.user.key())).await?;
-                set(conn, presence_key(data.guild_id, data.user.key()), &data).await?;
+                old = get(conn, presence_key(data.guild_id, get_user_id(&data.user))).await?;
+                set(
+                    conn,
+                    presence_key(data.guild_id, get_user_id(&data.user)),
+                    &data,
+                )
+                .await?;
             }
         }
         Event::Ready(data) => {
@@ -642,7 +660,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     get_members(conn, format!("{}{}", GUILD_KEY, KEYS_SUFFIX)).await?;
                 for guild in guilds {
                     let id = GuildId(get_keys(guild)[1].parse()?);
-                    if get_guild_shard(id) == shard && data.guilds.get(&id).is_none() {
+                    if get_guild_shard(id) == shard && !data.guilds.iter().any(|g| g.id == id) {
                         let _: Option<Value> = clear_guild(conn, id).await?;
                     }
                 }
@@ -650,11 +668,8 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             set_all(
                 conn,
                 data.guilds
-                    .values()
-                    .filter_map(|guild| match guild {
-                        GuildStatus::Online(_) => None,
-                        GuildStatus::Offline(guild) => Some((guild_key(guild.id), guild)),
-                    })
+                    .iter()
+                    .map(|guild| (guild_key(guild.id), guild))
                     .collect::<Vec<(String, &UnavailableGuild)>>()
                     .as_slice(),
             )
