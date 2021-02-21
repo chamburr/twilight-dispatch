@@ -12,8 +12,8 @@ separate from your application layer, bringing many benefits such as the followi
    different queues based on event type and consume them from multiple processes. This allows for
    load balancing between your service workers.
 
-If you encounter issues while running the service, feel free to contact CHamburr#2591 on Discord,
-either through Direct Message or on the [Twilight server](https://discord.gg/7jj8n7D).
+If you encounter any issues while running the service, please feel free create an issue here, or you
+can contact CHamburr#2591 on Discord. We will try our best to help you.
 
 ## Features
 
@@ -133,14 +133,15 @@ cargo run --release
 
 ### Running (Docker)
 
-If you prefer, the service can also be ran with Docker. Run the following commands to start the container.
+If you prefer, the service can also be ran with Docker. Run the following commands to start the
+container.
 
 ```
 docker build -t twilight-dispatch:latest .
 docker run -it --network host --env-file .env twilight-dispatch:latest
 ```
 
-The Docker image is also available here: https://hub.docker.com/r/chamburr/twilight-dispatch
+The Docker image is also available here: https://hub.docker.com/r/chamburr/twilight-dispatch.
 
 Note: You do not need to install Rust if you are using Docker.
 
