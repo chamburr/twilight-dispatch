@@ -192,7 +192,7 @@ async fn real_main() -> ApiResult<()> {
     for cluster in clusters {
         for (key, value) in cluster.down_resumable().into_iter() {
             sessions.insert(
-                key,
+                key.to_string(),
                 SessionInfo {
                     session_id: value.session_id,
                     sequence: value.sequence,
