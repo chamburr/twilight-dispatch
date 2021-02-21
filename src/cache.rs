@@ -106,17 +106,17 @@ pub async fn set_all<T: Serialize>(
         .iter()
         .map(|(key, value)| {
             let parts = get_keys(key);
-            if parts.len() > 1 {
+            if parts.len() == 2 {
                 members
                     .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
                     .or_insert_with(Vec::new)
                     .push(key);
-            } else if parts.len() > 2 && parts[0] != MESSAGE_KEY {
+            } else if parts.len() == 3 && parts[0] != MESSAGE_KEY {
                 members
                     .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
                     .or_insert_with(Vec::new)
                     .push(key);
-            } else if parts.len() > 2 {
+            } else if parts.len() == 3 {
                 members
                     .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
                     .or_insert_with(Vec::new)
