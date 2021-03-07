@@ -94,6 +94,11 @@ async fn serve(req: Request<Body>) -> ApiResult<Response<Body>> {
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, encoder.format_type())
             .body(Body::from(buffer))?)
+    } else if req.method() == Method::GET && req.uri().path() == "/healthcheck" {
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header(CONTENT_TYPE, "application/json")
+            .body(Body::from("{\"status\":\"OK\"}"))?)
     } else {
         Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
