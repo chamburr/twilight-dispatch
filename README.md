@@ -120,7 +120,7 @@ These are the steps to installing and running the service.
 ### Configuration
 
 The gateway can be configured with environmental variables or a `.env` file at the root of the
-project. An example can be found [here](.env).
+project. An example can be found [here](.env.example).
 
 ### Running
 
