@@ -15,10 +15,14 @@ use lapin::{
     ExchangeKind,
 };
 use std::collections::HashMap;
-use tokio::{
-    join,
-    signal::unix::{signal, SignalKind},
-};
+use tokio::{join, io};
+
+#[cfg(windows)]
+use tokio::signal::windows::ctrl_c;
+
+#[cfg(unix)]
+use tokio::signal::unix::{signal, SignalKind};
+
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -29,6 +33,21 @@ mod handler;
 mod metrics;
 mod models;
 mod utils;
+
+#[cfg(windows)]
+async fn wait_for_close() -> io::Result<()> {
+    let mut ctrl = ctrl_c()?;
+    ctrl.recv().await;
+    Ok(())
+}
+
+#[cfg(unix)]
+async fn wait_for_close() -> io::Result<()> {
+    let mut sigint = signal(SignalKind::interrupt())?;
+    sigint.recv().await;
+    Ok(())
+}
+
 
 #[tokio::main]
 async fn main() {
@@ -183,9 +202,7 @@ async fn real_main() -> ApiResult<()> {
         handler::incoming(clusters_clone, consumer).await;
     });
 
-    let mut sigint = signal(SignalKind::interrupt())?;
-    sigint.recv().await;
-
+    wait_for_close().await?;
     info!("Shutting down");
 
     let mut sessions = HashMap::new();
