@@ -1644,6 +1644,7 @@ dependencies = [
  "async-tungstenite",
  "bitflags",
  "dashmap",
+ "flate2",
  "futures-channel",
  "futures-timer",
  "futures-util",
