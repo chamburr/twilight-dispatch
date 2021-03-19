@@ -5,18 +5,20 @@ use crate::{
     models::{ApiResult, SessionInfo},
 };
 
+use futures_channel::{
+    mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
+    oneshot::{self, Sender},
+};
+use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::Serialize;
 use simd_json::owned::Value;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, future::Future, pin::Pin, sync::Arc, time::Duration};
 use time::{Format, OffsetDateTime};
+use tokio::time::sleep;
 use tracing::warn;
 use twilight_gateway::{
-    cluster::ShardScheme,
-    queue::{LargeBotQueue, LocalQueue, Queue},
-    shard::ResumeSession,
-    Cluster, EventTypeFlags, Intents,
+    cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, EventTypeFlags, Intents,
 };
-use twilight_http::Client;
 use twilight_model::{
     channel::embed::Embed,
     gateway::{
@@ -25,6 +27,75 @@ use twilight_model::{
     },
     id::{ChannelId, GuildId, UserId},
 };
+
+#[derive(Clone, Debug)]
+pub struct LocalQueue(UnboundedSender<Sender<()>>);
+
+impl LocalQueue {
+    pub fn new(duration: Duration) -> Self {
+        let (tx, rx) = unbounded();
+        tokio::spawn(waiter(rx, duration));
+
+        Self(tx)
+    }
+}
+
+impl Queue for LocalQueue {
+    fn request(&'_ self, [_, _]: [u64; 2]) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            let (tx, rx) = oneshot::channel();
+
+            if let Err(err) = self.0.clone().send(tx).await {
+                warn!("skipping, send failed: {:?}", err);
+                return;
+            }
+
+            let _ = rx.await;
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct LargeBotQueue(Vec<UnboundedSender<Sender<()>>>);
+
+impl LargeBotQueue {
+    pub fn new(buckets: usize, duration: Duration) -> Self {
+        let mut queues = Vec::with_capacity(buckets);
+        for _ in 0..buckets {
+            let (tx, rx) = unbounded();
+            tokio::spawn(waiter(rx, duration));
+            queues.push(tx)
+        }
+
+        Self(queues)
+    }
+}
+
+impl Queue for LargeBotQueue {
+    fn request(&'_ self, shard_id: [u64; 2]) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        #[allow(clippy::cast_possible_truncation)]
+        let bucket = (shard_id[0] % (self.0.len() as u64)) as usize;
+        let (tx, rx) = oneshot::channel();
+
+        Box::pin(async move {
+            if let Err(err) = self.0[bucket].clone().send(tx).await {
+                warn!("skipping, send failed: {:?}", err);
+                return;
+            }
+
+            let _ = rx.await;
+        })
+    }
+}
+
+async fn waiter(mut rx: UnboundedReceiver<Sender<()>>, duration: Duration) {
+    while let Some(req) = rx.next().await {
+        if let Err(err) = req.send(()) {
+            warn!("skipping, send failed: {:?}", err);
+        }
+        sleep(duration).await;
+    }
+}
 
 #[inline]
 pub fn get_user_id(user: &UserOrId) -> UserId {
@@ -98,13 +169,13 @@ pub async fn get_clusters(
     Ok(clusters)
 }
 
-pub async fn get_queue() -> Arc<Box<dyn Queue>> {
+pub fn get_queue() -> Arc<Box<dyn Queue>> {
     let concurrency = CONFIG.shards_concurrency as usize;
+    let wait = Duration::from_secs(CONFIG.shards_wait);
     if concurrency == 1 {
-        Arc::new(Box::new(LocalQueue::new()))
+        Arc::new(Box::new(LocalQueue::new(wait)))
     } else {
-        let client = Client::new(CONFIG.bot_token.clone());
-        Arc::new(Box::new(LargeBotQueue::new(concurrency, &client).await))
+        Arc::new(Box::new(LargeBotQueue::new(concurrency, wait)))
     }
 }
 
