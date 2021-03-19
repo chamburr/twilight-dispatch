@@ -15,7 +15,9 @@ use lapin::{
     options::{BasicAckOptions, BasicPublishOptions},
     BasicProperties, Consumer,
 };
+use redis::RedisResult;
 use simd_json::{json, Value};
+use time::Instant;
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
@@ -28,12 +30,42 @@ pub async fn outgoing(
 
     let mut events = cluster.some_events(get_event_flags());
 
+    let mut initial_pipe = redis::pipe();
+    let mut last_guild_create = Instant::now();
+    let mut ready = false;
+
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
         if CONFIG.state_enabled {
-            match cache::update(conn, &event).await {
-                Ok(value) => {
+            if !ready {
+                if let Event::GuildCreate(_) = &event {
+                    last_guild_create = Instant::now();
+                }
+
+                if last_guild_create.elapsed().as_seconds_f64() > 5.0 {
+                    ready = true;
+                    let result: RedisResult<()> = initial_pipe.query_async(conn).await;
+                    if let Err(err) = result {
+                        warn!(
+                            "[Shard {}] Failed to update initial state: {:?}",
+                            shard, err
+                        );
+                    }
+                }
+            }
+
+            match cache::update(conn, &event, initial_pipe.clone()).await {
+                Ok((value, pipe)) => {
                     old = value;
+
+                    if ready {
+                        let result: RedisResult<()> = pipe.query_async(conn).await;
+                        if let Err(err) = result {
+                            warn!("[Shard {}] Failed to update guild state: {:?}", shard, err);
+                        }
+                    } else {
+                        initial_pipe = pipe;
+                    }
                 }
                 Err(err) => {
                     warn!("[Shard {}] Failed to update state: {:?}", shard, err);

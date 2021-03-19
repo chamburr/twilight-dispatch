@@ -25,7 +25,7 @@ use twilight_model::{
         payload::update_status::UpdateStatusInfo,
         presence::{Activity, UserOrId},
     },
-    id::{ChannelId, GuildId, UserId},
+    id::{ChannelId, UserId},
 };
 
 #[derive(Clone, Debug)]
@@ -319,10 +319,6 @@ pub async fn log_discord_guild(
 
 pub fn get_shards() -> u64 {
     CONFIG.shards_end - CONFIG.shards_start + 1
-}
-
-pub fn get_guild_shard(guild_id: GuildId) -> u64 {
-    (guild_id.0 >> 22) % CONFIG.shards_total
 }
 
 pub fn to_value<T>(value: &T) -> ApiResult<Value>
