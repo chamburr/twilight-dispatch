@@ -499,7 +499,7 @@ pub async fn update(
             let emojis: Vec<Emoji> = get_all(conn, emoji_keys.as_slice())
                 .await?
                 .into_iter()
-                .filter_map(|emoji| emoji)
+                .flatten()
                 .collect();
             del_all(
                 conn,
@@ -621,7 +621,7 @@ pub async fn update(
                 let messages: Vec<Message> = get_all(conn, message_keys.as_slice())
                     .await?
                     .into_iter()
-                    .filter_map(|message| message)
+                    .flatten()
                     .collect();
                 del_all(conn, message_keys.as_slice()).await?;
                 old = Some(to_value(&messages)?);
