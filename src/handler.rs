@@ -190,7 +190,7 @@ pub async fn outgoing(
                 }
             }
             Event::GuildCreate(data) => {
-                if old.is_none() {
+                if ready {
                     GUILD_EVENTS.with_label_values(&["Join"]).inc();
                     log_discord_guild(
                         &cluster,
