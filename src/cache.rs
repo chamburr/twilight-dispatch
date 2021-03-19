@@ -442,26 +442,32 @@ pub async fn update(
             }
             items.push((guild_key(data.id), GuildItem::Guild(guild)));
 
-            let mut keys = vec![];
+            let mut members = HashMap::new();
+
             let items = items
                 .iter()
                 .map(|(key, value)| {
-                    keys.push(key);
+                    let parts = get_keys(key);
+                    members
+                        .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
+                        .or_insert_with(Vec::new)
+                        .push(key);
+                    members
+                        .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
+                        .or_insert_with(Vec::new)
+                        .push(key);
+
                     simd_json::to_string(value)
                         .map(|value| (key, value))
                         .map_err(ApiError::from)
                 })
                 .collect::<ApiResult<Vec<(&String, String)>>>()?;
 
-            pipe = pipe
-                .set_multiple(items.as_slice())
-                .ignore()
-                .sadd(
-                    format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, data.id),
-                    keys.as_slice(),
-                )
-                .ignore()
-                .clone();
+            pipe = pipe.set_multiple(items.as_slice()).ignore().clone();
+
+            for (key, value) in members {
+                pipe = pipe.sadd(key, value.as_slice()).ignore().clone();
+            }
 
             if CONFIG.state_member {
                 let keys = data
