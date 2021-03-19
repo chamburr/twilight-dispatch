@@ -57,6 +57,9 @@ pub async fn outgoing(
                         }
                     }
                 }
+            } else if let Event::Ready(_) = &event {
+                ready[shard] = false;
+                last_guild_create[shard] = None;
             }
 
             match cache::update(conn, &event).await {
