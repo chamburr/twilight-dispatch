@@ -133,7 +133,7 @@ async fn real_main() -> ApiResult<()> {
 
     let shards = get_shards();
     let resumes = get_resume_sessions(&mut conn).await?;
-    let queue = get_queue().await;
+    let queue = get_queue();
     let clusters = get_clusters(resumes.clone(), queue).await?;
 
     info!("Starting up {} shards", shards);

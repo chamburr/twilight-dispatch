@@ -1,11 +1,12 @@
 [package]
 name = "twilight-dispatch"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["CHamburr <hi@chamburr.xyz>"]
 edition = "2018"
 
 [dependencies]
 dotenv = { version = "0.15", default-features = false }
+futures-channel = { version = "0.3", default-features = false }
 futures-util = { version = "0.3", default-features = false }
 hyper = { version = "0.14", default-features = false, features = ["server", "tcp", "http1"] }
 lapin = { version = "1.6", default-features = false }
@@ -19,8 +20,7 @@ time = { version = "0.2", default-features = false, features = ["std"] }
 tokio = { version = "1.2", default-features = false, features = ["rt-multi-thread", "macros", "signal", "time"] }
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "env-filter", "fmt"] }
-twilight-gateway = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false, features = ["rustls-webpki-roots", "simd-json"] }
-twilight-http = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false, features = ["rustls-webpki-roots", "simd-json"] }
+twilight-gateway = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false, features = ["rustls-webpki-roots", "simd-json", "simd-zlib"] }
 twilight-model = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false }
 
 # Mitigate https://github.com/bitvecto-rs/bitvec/issues/105

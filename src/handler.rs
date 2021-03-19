@@ -15,7 +15,9 @@ use lapin::{
     options::{BasicAckOptions, BasicPublishOptions},
     BasicProperties, Consumer,
 };
+use redis::RedisResult;
 use simd_json::{json, Value};
+use time::Instant;
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
@@ -28,12 +30,52 @@ pub async fn outgoing(
 
     let mut events = cluster.some_events(get_event_flags());
 
+    let mut initial_pipe = vec![redis::pipe(); CONFIG.shards_total as usize];
+    let mut last_guild_create = vec![None; CONFIG.shards_total as usize];
+    let mut ready = vec![false; CONFIG.shards_total as usize];
+
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
+        let shard = shard as usize;
+
         if CONFIG.state_enabled {
+            if !ready[shard] {
+                if let Event::GuildCreate(_) = &event {
+                    last_guild_create[shard] = Some(Instant::now());
+                }
+
+                if let Some(last) = last_guild_create[shard] {
+                    if last.elapsed().as_seconds_f64() > 5.0 {
+                        ready[shard] = true;
+                        let result: RedisResult<()> = initial_pipe[shard].query_async(conn).await;
+                        initial_pipe[shard].clear();
+                        if let Err(err) = result {
+                            warn!(
+                                "[Shard {}] Failed to update initial state: {:?}",
+                                shard, err
+                            );
+                        }
+                    }
+                }
+            } else if let Event::Ready(_) = &event {
+                ready[shard] = false;
+                last_guild_create[shard] = None;
+            }
+
             match cache::update(conn, &event).await {
-                Ok(value) => {
+                Ok((value, pipe)) => {
                     old = value;
+
+                    if ready[shard] {
+                        let result: RedisResult<()> = pipe.query_async(conn).await;
+                        if let Err(err) = result {
+                            warn!("[Shard {}] Failed to update guild state: {:?}", shard, err);
+                        }
+                    } else {
+                        for command in pipe.cmd_iter() {
+                            initial_pipe[shard].add_command(command.clone());
+                        }
+                    }
                 }
                 Err(err) => {
                     warn!("[Shard {}] Failed to update state: {:?}", shard, err);
@@ -50,11 +92,11 @@ pub async fn outgoing(
             }
             Event::Ready(data) => {
                 info!("[Shard {}] Ready (session: {})", shard, data.session_id);
-                log_discord(&cluster, READY_COLOR, format!("[Shard {}] Ready", shard)).await;
+                log_discord(&cluster, READY_COLOR, format!("[Shard {}] Ready", shard));
                 SHARD_EVENTS.with_label_values(&["Ready"]).inc();
             }
             Event::Resumed => {
-                if let Ok(info) = cluster.shard(shard).unwrap().info() {
+                if let Ok(info) = cluster.shard(shard as u64).unwrap().info() {
                     info!(
                         "[Shard {}] Resumed (session: {})",
                         shard,
@@ -63,7 +105,7 @@ pub async fn outgoing(
                 } else {
                     info!("[Shard {}] Resumed", shard);
                 }
-                log_discord(&cluster, RESUME_COLOR, format!("[Shard {}] Resumed", shard)).await;
+                log_discord(&cluster, RESUME_COLOR, format!("[Shard {}] Resumed", shard));
                 SHARD_EVENTS.with_label_values(&["Resumed"]).inc();
             }
             Event::ShardConnected(_) => {
@@ -72,8 +114,7 @@ pub async fn outgoing(
                     &cluster,
                     CONNECT_COLOR,
                     format!("[Shard {}] Connected", shard),
-                )
-                .await;
+                );
                 SHARD_EVENTS.with_label_values(&["Connected"]).inc();
             }
             Event::ShardConnecting(data) => {
@@ -98,8 +139,7 @@ pub async fn outgoing(
                     &cluster,
                     DISCONNECT_COLOR,
                     format!("[Shard {}] Disconnected", shard),
-                )
-                .await;
+                );
                 SHARD_EVENTS.with_label_values(&["Disconnected"]).inc();
             }
             Event::ShardIdentifying(_) => {
@@ -158,15 +198,14 @@ pub async fn outgoing(
                 }
             }
             Event::GuildCreate(data) => {
-                if old.is_none() {
+                if ready[shard] {
                     GUILD_EVENTS.with_label_values(&["Join"]).inc();
                     log_discord_guild(
                         &cluster,
                         JOIN_COLOR,
                         "Guild Join",
                         format!("{} ({})", data.name, data.id),
-                    )
-                    .await;
+                    );
                 }
             }
             Event::GuildDelete(data) => {
@@ -189,8 +228,7 @@ pub async fn outgoing(
                                 .map(|id| id.as_str().unwrap())
                                 .unwrap_or("0")
                         ),
-                    )
-                    .await;
+                    );
                 }
             }
             _ => {}
