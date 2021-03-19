@@ -343,9 +343,9 @@ async fn clear_guild<T: DeserializeOwned>(
 pub async fn update(
     conn: &mut redis::aio::Connection,
     event: &Event,
-    mut pipe: redis::Pipeline,
 ) -> ApiResult<(Option<Value>, redis::Pipeline)> {
     let mut old: Option<Value> = None;
+    let mut pipe = redis::pipe();
 
     match event {
         Event::ChannelCreate(data) => match &data.0 {
