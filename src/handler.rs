@@ -48,18 +48,18 @@ pub async fn outgoing(
                     if last.elapsed().as_seconds_f64() > 5.0 {
                         ready[shard] = true;
                         let result: RedisResult<()> = initial_pipe[shard].query_async(conn).await;
+                        initial_pipe[shard].clear();
                         if let Err(err) = result {
                             warn!(
                                 "[Shard {}] Failed to update initial state: {:?}",
                                 shard, err
                             );
                         }
-                        initial_pipe[shard] = redis::pipe();
                     }
                 }
             }
 
-            match cache::update(conn, &event, initial_pipe[shard].clone()).await {
+            match cache::update(conn, &event).await {
                 Ok((value, pipe)) => {
                     old = value;
 
@@ -69,7 +69,9 @@ pub async fn outgoing(
                             warn!("[Shard {}] Failed to update guild state: {:?}", shard, err);
                         }
                     } else {
-                        initial_pipe[shard] = pipe;
+                        for command in pipe.cmd_iter() {
+                            initial_pipe[shard].add_command(command.clone());
+                        }
                     }
                 }
                 Err(err) => {
