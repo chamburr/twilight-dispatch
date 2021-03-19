@@ -30,43 +30,46 @@ pub async fn outgoing(
 
     let mut events = cluster.some_events(get_event_flags());
 
-    let mut initial_pipe = redis::pipe();
-    let mut last_guild_create = None;
-    let mut ready = false;
+    let mut initial_pipe = vec![redis::pipe(); CONFIG.shards_total as usize];
+    let mut last_guild_create = vec![None; CONFIG.shards_total as usize];
+    let mut ready = vec![false; CONFIG.shards_total as usize];
 
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
+        let shard = shard as usize;
+
         if CONFIG.state_enabled {
-            if !ready {
+            if !ready[shard] {
                 if let Event::GuildCreate(_) = &event {
-                    last_guild_create = Some(Instant::now());
+                    last_guild_create[shard] = Some(Instant::now());
                 }
 
-                if let Some(last) = last_guild_create {
+                if let Some(last) = last_guild_create[shard] {
                     if last.elapsed().as_seconds_f64() > 5.0 {
-                        ready = true;
-                        let result: RedisResult<()> = initial_pipe.query_async(conn).await;
+                        ready[shard] = true;
+                        let result: RedisResult<()> = initial_pipe[shard].query_async(conn).await;
                         if let Err(err) = result {
                             warn!(
                                 "[Shard {}] Failed to update initial state: {:?}",
                                 shard, err
                             );
                         }
+                        initial_pipe[shard] = redis::pipe();
                     }
                 }
             }
 
-            match cache::update(conn, &event, initial_pipe.clone()).await {
+            match cache::update(conn, &event, initial_pipe[shard].clone()).await {
                 Ok((value, pipe)) => {
                     old = value;
 
-                    if ready {
+                    if ready[shard] {
                         let result: RedisResult<()> = pipe.query_async(conn).await;
                         if let Err(err) = result {
                             warn!("[Shard {}] Failed to update guild state: {:?}", shard, err);
                         }
                     } else {
-                        initial_pipe = pipe;
+                        initial_pipe[shard] = pipe;
                     }
                 }
                 Err(err) => {
@@ -88,7 +91,7 @@ pub async fn outgoing(
                 SHARD_EVENTS.with_label_values(&["Ready"]).inc();
             }
             Event::Resumed => {
-                if let Ok(info) = cluster.shard(shard).unwrap().info() {
+                if let Ok(info) = cluster.shard(shard as u64).unwrap().info() {
                     info!(
                         "[Shard {}] Resumed (session: {})",
                         shard,
@@ -190,7 +193,7 @@ pub async fn outgoing(
                 }
             }
             Event::GuildCreate(data) => {
-                if ready {
+                if ready[shard] {
                     GUILD_EVENTS.with_label_values(&["Join"]).inc();
                     log_discord_guild(
                         &cluster,
