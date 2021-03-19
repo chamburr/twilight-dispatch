@@ -38,22 +38,20 @@ pub async fn outgoing(
         let mut old = None;
         if CONFIG.state_enabled {
             if !ready {
-                if let None = last_guild_create {
-                    last_guild_create = Some(Instant::now());
-                }
-
                 if let Event::GuildCreate(_) = &event {
                     last_guild_create = Some(Instant::now());
                 }
 
-                if last_guild_create.unwrap().elapsed().as_seconds_f64() > 5.0 {
-                    ready = true;
-                    let result: RedisResult<()> = initial_pipe.query_async(conn).await;
-                    if let Err(err) = result {
-                        warn!(
-                            "[Shard {}] Failed to update initial state: {:?}",
-                            shard, err
-                        );
+                if let Some(last) = last_guild_create {
+                    if last.elapsed().as_seconds_f64() > 5.0 {
+                        ready = true;
+                        let result: RedisResult<()> = initial_pipe.query_async(conn).await;
+                        if let Err(err) = result {
+                            warn!(
+                                "[Shard {}] Failed to update initial state: {:?}",
+                                shard, err
+                            );
+                        }
                     }
                 }
             }
@@ -86,7 +84,7 @@ pub async fn outgoing(
             }
             Event::Ready(data) => {
                 info!("[Shard {}] Ready (session: {})", shard, data.session_id);
-                log_discord(&cluster, READY_COLOR, format!("[Shard {}] Ready", shard)).await;
+                log_discord(&cluster, READY_COLOR, format!("[Shard {}] Ready", shard));
                 SHARD_EVENTS.with_label_values(&["Ready"]).inc();
             }
             Event::Resumed => {
@@ -99,7 +97,7 @@ pub async fn outgoing(
                 } else {
                     info!("[Shard {}] Resumed", shard);
                 }
-                log_discord(&cluster, RESUME_COLOR, format!("[Shard {}] Resumed", shard)).await;
+                log_discord(&cluster, RESUME_COLOR, format!("[Shard {}] Resumed", shard));
                 SHARD_EVENTS.with_label_values(&["Resumed"]).inc();
             }
             Event::ShardConnected(_) => {
@@ -108,8 +106,7 @@ pub async fn outgoing(
                     &cluster,
                     CONNECT_COLOR,
                     format!("[Shard {}] Connected", shard),
-                )
-                .await;
+                );
                 SHARD_EVENTS.with_label_values(&["Connected"]).inc();
             }
             Event::ShardConnecting(data) => {
@@ -134,8 +131,7 @@ pub async fn outgoing(
                     &cluster,
                     DISCONNECT_COLOR,
                     format!("[Shard {}] Disconnected", shard),
-                )
-                .await;
+                );
                 SHARD_EVENTS.with_label_values(&["Disconnected"]).inc();
             }
             Event::ShardIdentifying(_) => {
@@ -201,8 +197,7 @@ pub async fn outgoing(
                         JOIN_COLOR,
                         "Guild Join",
                         format!("{} ({})", data.name, data.id),
-                    )
-                    .await;
+                    );
                 }
             }
             Event::GuildDelete(data) => {
@@ -225,8 +220,7 @@ pub async fn outgoing(
                                 .map(|id| id.as_str().unwrap())
                                 .unwrap_or("0")
                         ),
-                    )
-                    .await;
+                    );
                 }
             }
             _ => {}

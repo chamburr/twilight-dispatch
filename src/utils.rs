@@ -256,65 +256,72 @@ pub fn get_event_flags() -> EventTypeFlags {
     event_flags
 }
 
-pub async fn log_discord(cluster: &Cluster, color: usize, message: impl Into<String>) {
-    let client = cluster.config().http_client();
+pub fn log_discord(cluster: &Cluster, color: usize, message: impl Into<String>) {
+    let client = cluster.config().http_client().clone();
+    let message = message.into();
 
-    let message = client
-        .create_message(ChannelId(CONFIG.log_channel))
-        .embed(Embed {
-            author: None,
-            color: Some(color as u32),
-            description: None,
-            fields: vec![],
-            footer: None,
-            image: None,
-            kind: "".to_owned(),
-            provider: None,
-            thumbnail: None,
-            timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
-            title: Some(message.into()),
-            url: None,
-            video: None,
-        });
+    tokio::spawn(async move {
+        let message = client
+            .create_message(ChannelId(CONFIG.log_channel))
+            .embed(Embed {
+                author: None,
+                color: Some(color as u32),
+                description: None,
+                fields: vec![],
+                footer: None,
+                image: None,
+                kind: "".to_owned(),
+                provider: None,
+                thumbnail: None,
+                timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
+                title: Some(message),
+                url: None,
+                video: None,
+            });
 
-    if let Ok(message) = message {
-        if let Err(err) = message.await {
-            warn!("Failed to post message to Discord: {:?}", err)
+        if let Ok(message) = message {
+            if let Err(err) = message.await {
+                warn!("Failed to post message to Discord: {:?}", err)
+            }
         }
-    }
+    });
 }
 
-pub async fn log_discord_guild(
+pub fn log_discord_guild(
     cluster: &Cluster,
     color: usize,
     title: impl Into<String>,
     message: impl Into<String>,
 ) {
-    let client = cluster.config().http_client();
+    let client = cluster.config().http_client().clone();
+    let title = title.into();
+    let message = message.into();
 
-    let message = client
-        .create_message(ChannelId(CONFIG.log_guild_channel))
-        .embed(Embed {
-            author: None,
-            color: Some(color as u32),
-            description: Some(message.into()),
-            fields: vec![],
-            footer: None,
-            image: None,
-            kind: "".to_owned(),
-            provider: None,
-            thumbnail: None,
-            timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
-            title: Some(title.into()),
-            url: None,
-            video: None,
-        });
+    tokio::spawn(async move {
+        let message = client
+            .create_message(ChannelId(CONFIG.log_guild_channel))
+            .embed(Embed {
+                author: None,
+                color: Some(color as u32),
+                description: Some(message),
+                fields: vec![],
+                footer: None,
+                image: None,
+                kind: "".to_owned(),
+                provider: None,
+                thumbnail: None,
+                timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
+                title: Some(title),
+                url: None,
+                video: None,
+            });
 
-    if let Ok(message) = message {
-        if let Err(err) = message.await {
-            warn!("Failed to post message to Discord: {:?}", err)
+        if let Ok(message) = message {
+            if let Err(err) = message.await {
+                warn!("Failed to post message to Discord: {:?}", err)
+            }
         }
-    }
+    });
 }
 
 pub fn get_shards() -> u64 {
