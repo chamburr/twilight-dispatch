@@ -31,18 +31,22 @@ pub async fn outgoing(
     let mut events = cluster.some_events(get_event_flags());
 
     let mut initial_pipe = redis::pipe();
-    let mut last_guild_create = Instant::now();
+    let mut last_guild_create = None;
     let mut ready = false;
 
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
         if CONFIG.state_enabled {
             if !ready {
-                if let Event::GuildCreate(_) = &event {
-                    last_guild_create = Instant::now();
+                if let None = last_guild_create {
+                    last_guild_create = Some(Instant::now());
                 }
 
-                if last_guild_create.elapsed().as_seconds_f64() > 5.0 {
+                if let Event::GuildCreate(_) = &event {
+                    last_guild_create = Some(Instant::now());
+                }
+
+                if last_guild_create.unwrap().elapsed().as_seconds_f64() > 5.0 {
                     ready = true;
                     let result: RedisResult<()> = initial_pipe.query_async(conn).await;
                     if let Err(err) = result {
