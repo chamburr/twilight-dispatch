@@ -11,20 +11,17 @@ futures-util = { version = "0.3", default-features = false }
 hyper = { version = "0.14", default-features = false, features = ["server", "tcp", "http1"] }
 lapin = { version = "1.6", default-features = false }
 lazy_static = { version = "1.4", default-features = false }
-prometheus = { version = "0.11", default-features = false, features = ["process"] }
-redis = { version = "0.19", default-features = false, features = ["tokio-comp"] }
+prometheus = { version = "0.12", default-features = false, features = ["process"] }
+redis = { version = "0.20", default-features = false, features = ["tokio-comp"] }
 serde = { version = "1.0", default-features = false }
 serde_repr = { version = "0.1", default-features = false }
 simd-json = { version = "0.3", default-features = false }
 time = { version = "0.2", default-features = false, features = ["std"] }
 tokio = { version = "1.2", default-features = false, features = ["rt-multi-thread", "macros", "signal", "time"] }
 tracing = { version = "0.1", default-features = false }
-tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "env-filter", "fmt"] }
+tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "fmt"] }
 twilight-gateway = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false, features = ["rustls-webpki-roots", "simd-json", "simd-zlib"] }
 twilight-model = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false }
-
-# Mitigate https://github.com/bitvecto-rs/bitvec/issues/105
-funty = "=1.1.0"
 
 [profile.release]
 codegen-units = 1
