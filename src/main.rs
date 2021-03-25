@@ -20,7 +20,6 @@ use tokio::{
     signal::unix::{signal, SignalKind},
 };
 use tracing::{error, info};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod cache;
 mod config;
@@ -33,19 +32,7 @@ mod utils;
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-
-    if CONFIG.rust_log.to_lowercase() == "info" {
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer())
-            .with(
-                tracing_subscriber::EnvFilter::from_default_env()
-                    .add_directive("twilight_gateway=warn".parse().unwrap())
-                    .add_directive("twilight_gateway_queue=warn".parse().unwrap()),
-            )
-            .init()
-    } else {
-        tracing_subscriber::fmt::init()
-    }
+    tracing_subscriber::fmt::init();
 
     let result = real_main().await;
 
