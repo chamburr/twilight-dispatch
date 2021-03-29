@@ -15,9 +15,7 @@ use lapin::{
     options::{BasicAckOptions, BasicPublishOptions},
     BasicProperties, Consumer,
 };
-use redis::RedisResult;
 use simd_json::{json, Value};
-use time::Instant;
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
@@ -30,52 +28,14 @@ pub async fn outgoing(
 
     let mut events = cluster.some_events(get_event_flags());
 
-    let mut initial_pipe = vec![redis::pipe(); CONFIG.shards_total as usize];
-    let mut last_guild_create = vec![None; CONFIG.shards_total as usize];
-    let mut ready = vec![false; CONFIG.shards_total as usize];
-
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
         let shard = shard as usize;
 
         if CONFIG.state_enabled {
-            if !ready[shard] {
-                if let Event::GuildCreate(_) = &event {
-                    last_guild_create[shard] = Some(Instant::now());
-                }
-
-                if let Some(last) = last_guild_create[shard] {
-                    if last.elapsed().as_seconds_f64() > 5.0 {
-                        ready[shard] = true;
-                        let result: RedisResult<()> = initial_pipe[shard].query_async(conn).await;
-                        initial_pipe[shard].clear();
-                        if let Err(err) = result {
-                            warn!(
-                                "[Shard {}] Failed to update initial state: {:?}",
-                                shard, err
-                            );
-                        }
-                    }
-                }
-            } else if let Event::Ready(_) = &event {
-                ready[shard] = false;
-                last_guild_create[shard] = None;
-            }
-
             match cache::update(conn, &event).await {
-                Ok((value, pipe)) => {
+                Ok(value) => {
                     old = value;
-
-                    if ready[shard] {
-                        let result: RedisResult<()> = pipe.query_async(conn).await;
-                        if let Err(err) = result {
-                            warn!("[Shard {}] Failed to update guild state: {:?}", shard, err);
-                        }
-                    } else {
-                        for command in pipe.cmd_iter() {
-                            initial_pipe[shard].add_command(command.clone());
-                        }
-                    }
                 }
                 Err(err) => {
                     warn!("[Shard {}] Failed to update state: {:?}", shard, err);
@@ -198,7 +158,7 @@ pub async fn outgoing(
                 }
             }
             Event::GuildCreate(data) => {
-                if ready[shard] {
+                if old.is_none() {
                     GUILD_EVENTS.with_label_values(&["Join"]).inc();
                     log_discord_guild(
                         &cluster,
