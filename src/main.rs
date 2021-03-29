@@ -15,10 +15,7 @@ use lapin::{
     ExchangeKind,
 };
 use std::collections::HashMap;
-use tokio::{
-    join,
-    signal::unix::{signal, SignalKind},
-};
+use tokio::{join, signal::ctrl_c};
 use tracing::{error, info};
 
 mod cache;
@@ -170,8 +167,7 @@ async fn real_main() -> ApiResult<()> {
         handler::incoming(clusters_clone, consumer).await;
     });
 
-    let mut sigint = signal(SignalKind::interrupt())?;
-    sigint.recv().await;
+    ctrl_c().await?;
 
     info!("Shutting down");
 
