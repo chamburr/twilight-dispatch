@@ -340,12 +340,8 @@ async fn clear_guild<T: DeserializeOwned>(
     Ok(guild)
 }
 
-pub async fn update(
-    conn: &mut redis::aio::Connection,
-    event: &Event,
-) -> ApiResult<(Option<Value>, redis::Pipeline)> {
+pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResult<Option<Value>> {
     let mut old: Option<Value> = None;
-    let mut pipe = redis::pipe();
 
     match event {
         Event::ChannelCreate(data) => match &data.0 {
@@ -398,6 +394,8 @@ pub async fn update(
             _ => {}
         },
         Event::GuildCreate(data) => {
+            old = clear_guild(conn, data.id).await?;
+
             let mut items = vec![];
             let mut guild = data.clone();
             for mut channel in guild.channels.drain(..) {
@@ -442,51 +440,19 @@ pub async fn update(
             }
             items.push((guild_key(data.id), GuildItem::Guild(guild)));
 
-            let mut members = HashMap::new();
-
-            let items = items
-                .iter()
-                .map(|(key, value)| {
-                    let parts = get_keys(key);
-                    members
-                        .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
-                        .or_insert_with(Vec::new)
-                        .push(key);
-                    members
-                        .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
-                        .or_insert_with(Vec::new)
-                        .push(key);
-
-                    simd_json::to_string(value)
-                        .map(|value| (key, value))
-                        .map_err(ApiError::from)
-                })
-                .collect::<ApiResult<Vec<(&String, String)>>>()?;
-
-            pipe = pipe.set_multiple(items.as_slice()).ignore().clone();
-
-            for (key, value) in members {
-                pipe = pipe.sadd(key, value.as_slice()).ignore().clone();
-            }
-
+            set_all(conn, items.as_slice()).await?;
             if CONFIG.state_member {
-                let keys = data
-                    .members
-                    .iter()
-                    .map(|member| {
-                        let key = member_key(data.id, member.user.id);
-                        let timestamp = FormattedDateTime::now()
-                            + time::Duration::milliseconds(CONFIG.state_member_ttl as i64);
-                        simd_json::to_string(&timestamp)
-                            .map(|value| (key, value))
-                            .map_err(ApiError::from)
-                    })
-                    .collect::<ApiResult<Vec<(String, String)>>>()?;
-
-                pipe = pipe
-                    .hset_multiple(EXPIRY_KEYS, keys.as_slice())
-                    .ignore()
-                    .clone();
+                expire_all(
+                    conn,
+                    data.members
+                        .iter()
+                        .map(|member| {
+                            (member_key(data.id, member.user.id), CONFIG.state_member_ttl)
+                        })
+                        .collect::<Vec<(String, u64)>>()
+                        .as_slice(),
+                )
+                .await?;
             }
         }
         Event::GuildDelete(data) => {
@@ -737,5 +703,5 @@ pub async fn update(
         _ => {}
     }
 
-    Ok((old, pipe))
+    Ok(old)
 }
