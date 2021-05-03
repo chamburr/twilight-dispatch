@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 dotenv = { version = "0.15", default-features = false }
-futures-channel = { version = "0.3", default-features = false }
 futures-util = { version = "0.3", default-features = false }
 hyper = { version = "0.14", default-features = false, features = ["server", "tcp", "http1"] }
 lapin = { version = "1.6", default-features = false }
@@ -15,13 +14,16 @@ prometheus = { version = "0.12", default-features = false, features = ["process"
 redis = { version = "0.20", default-features = false, features = ["tokio-comp"] }
 serde = { version = "1.0", default-features = false }
 serde_repr = { version = "0.1", default-features = false }
-simd-json = { version = "0.3", default-features = false }
+simd-json = { version = "0.4", default-features = false }
 time = { version = "0.2", default-features = false, features = ["std"] }
 tokio = { version = "1.2", default-features = false, features = ["rt-multi-thread", "macros", "signal", "time"] }
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "fmt"] }
 twilight-gateway = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false, features = ["rustls-webpki-roots", "simd-json", "simd-zlib"] }
 twilight-model = { git = "https://github.com/twilight-rs/twilight", branch = "v0.4", default-features = false }
+
+[patch.crates-io]
+hyper-rustls = { git = "https://github.com/ctz/hyper-rustls" }
 
 [profile.release]
 codegen-units = 1

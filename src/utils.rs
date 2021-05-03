@@ -5,11 +5,10 @@ use crate::{
     models::{ApiResult, SessionInfo},
 };
 
-use futures_channel::{
-    mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
+use tokio::sync::{
+    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot::{self, Sender},
 };
-use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::Serialize;
 use simd_json::owned::Value;
 use std::{collections::HashMap, fmt::Debug, future::Future, pin::Pin, sync::Arc, time::Duration};
@@ -33,7 +32,7 @@ pub struct LocalQueue(UnboundedSender<Sender<()>>);
 
 impl LocalQueue {
     pub fn new(duration: Duration) -> Self {
-        let (tx, rx) = unbounded();
+        let (tx, rx) = unbounded_channel();
         tokio::spawn(waiter(rx, duration));
 
         Self(tx)
@@ -45,7 +44,7 @@ impl Queue for LocalQueue {
         Box::pin(async move {
             let (tx, rx) = oneshot::channel();
 
-            if let Err(err) = self.0.clone().send(tx).await {
+            if let Err(err) = self.0.clone().send(tx) {
                 warn!("skipping, send failed: {:?}", err);
                 return;
             }
@@ -62,7 +61,7 @@ impl LargeBotQueue {
     pub fn new(buckets: usize, duration: Duration) -> Self {
         let mut queues = Vec::with_capacity(buckets);
         for _ in 0..buckets {
-            let (tx, rx) = unbounded();
+            let (tx, rx) = unbounded_channel();
             tokio::spawn(waiter(rx, duration));
             queues.push(tx)
         }
@@ -78,7 +77,7 @@ impl Queue for LargeBotQueue {
         let (tx, rx) = oneshot::channel();
 
         Box::pin(async move {
-            if let Err(err) = self.0[bucket].clone().send(tx).await {
+            if let Err(err) = self.0[bucket].clone().send(tx) {
                 warn!("skipping, send failed: {:?}", err);
                 return;
             }
@@ -89,7 +88,7 @@ impl Queue for LargeBotQueue {
 }
 
 async fn waiter(mut rx: UnboundedReceiver<Sender<()>>, duration: Duration) {
-    while let Some(req) = rx.next().await {
+    while let Some(req) = rx.recv().await {
         if let Err(err) = req.send(()) {
             warn!("skipping, send failed: {:?}", err);
         }
