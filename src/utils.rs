@@ -5,15 +5,17 @@ use crate::{
     models::{ApiResult, SessionInfo},
 };
 
-use tokio::sync::{
-    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-    oneshot::{self, Sender},
-};
 use serde::Serialize;
 use simd_json::owned::Value;
 use std::{collections::HashMap, fmt::Debug, future::Future, pin::Pin, sync::Arc, time::Duration};
 use time::{Format, OffsetDateTime};
-use tokio::time::sleep;
+use tokio::{
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        oneshot::{self, Sender},
+    },
+    time::sleep,
+};
 use tracing::warn;
 use twilight_gateway::{
     cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, EventTypeFlags, Intents,
