@@ -15,7 +15,7 @@ use lapin::{
     options::{BasicAckOptions, BasicPublishOptions},
     BasicProperties, Consumer,
 };
-use simd_json::{json, Value};
+use simd_json::{json, ValueAccess};
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
