@@ -139,6 +139,7 @@ pub async fn get_clusters(
             vec![Activity {
                 application_id: None,
                 assets: None,
+                buttons: Vec::new(),
                 created_at: None,
                 details: None,
                 emoji: None,

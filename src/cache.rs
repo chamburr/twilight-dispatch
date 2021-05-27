@@ -409,6 +409,9 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                     GuildChannel::Voice(channel) => {
                         channel.guild_id = Some(data.id);
                     }
+                    GuildChannel::Stage(channel) => {
+                        channel.guild_id = Some(data.id);
+                    }
                 }
                 items.push((
                     channel_key(data.id, channel.id()),
