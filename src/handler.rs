@@ -32,10 +32,6 @@ pub async fn outgoing(
         let mut old = None;
         let shard = shard as usize;
 
-        if let Event::GuildCreate(data) = &event {
-            tracing::info!("{} {}", data.id, data.name);
-        }
-
         if CONFIG.state_enabled {
             match cache::update(conn, &event).await {
                 Ok(value) => {
