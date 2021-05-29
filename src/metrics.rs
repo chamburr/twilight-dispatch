@@ -73,7 +73,7 @@ lazy_static! {
     pub static ref STATE_ROLES: IntGauge =
         register_int_gauge!("state_roles", "Number of roles in state cache").unwrap();
     pub static ref STATE_EMOJIS: IntGauge =
-        register_int_gauge!("state_emojiS", "Number of emojis in state cache").unwrap();
+        register_int_gauge!("state_emojis", "Number of emojis in state cache").unwrap();
     pub static ref STATE_MEMBERS: IntGauge =
         register_int_gauge!("state_members", "Number of members in state cache").unwrap();
     pub static ref STATE_PRESENCES: IntGauge =
