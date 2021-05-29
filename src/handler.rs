@@ -28,17 +28,27 @@ pub async fn outgoing(
 
     let mut events = cluster.some_events(get_event_flags());
 
+    let mut bot_id = None;
+
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
         let shard = shard as usize;
 
         if CONFIG.state_enabled {
-            match cache::update(conn, &event).await {
-                Ok(value) => {
-                    old = value;
+            if let Event::Ready(data) = &event {
+                if bot_id.is_none() {
+                    bot_id = Some(data.user.id);
                 }
-                Err(err) => {
-                    warn!("[Shard {}] Failed to update state: {:?}", shard, err);
+            }
+
+            if let Some(bot_id) = bot_id {
+                match cache::update(conn, &event, bot_id).await {
+                    Ok(value) => {
+                        old = value;
+                    }
+                    Err(err) => {
+                        warn!("[Shard {}] Failed to update state: {:?}", shard, err);
+                    }
                 }
             }
         }
