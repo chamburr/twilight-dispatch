@@ -1,10 +1,9 @@
 use crate::{
     config::CONFIG,
     constants::{
-        channel_key, emoji_key, guild_key, member_key, message_key, presence_key,
-        private_channel_key, role_key, voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL,
-        CACHE_DUMP_INTERVAL, CHANNEL_KEY, EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX,
-        MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
+        channel_key, emoji_key, guild_key, member_key, message_key, presence_key, role_key,
+        voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL, CACHE_DUMP_INTERVAL, CHANNEL_KEY,
+        EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX, MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
     },
     models::{ApiError, ApiResult, FormattedDateTime, GuildItem, SessionInfo, StatusInfo},
     utils::{get_keys, get_user_id, to_value},
@@ -350,50 +349,49 @@ pub async fn update(
     match event {
         Event::ChannelCreate(data) => match &data.0 {
             Channel::Private(c) => {
-                set(conn, private_channel_key(c.id), c).await?;
+                set(conn, channel_key(c.id), c).await?;
             }
             Channel::Guild(c) => {
-                set(conn, channel_key(c.guild_id().unwrap(), c.id()), c).await?;
+                set(conn, channel_key(c.id()), c).await?;
             }
             _ => {}
         },
         Event::ChannelDelete(data) => match &data.0 {
             Channel::Private(c) => {
-                old = get(conn, private_channel_key(c.id)).await?;
-                del(conn, private_channel_key(c.id)).await?;
+                old = get(conn, channel_key(c.id)).await?;
+                del(conn, channel_key(c.id)).await?;
             }
             Channel::Guild(c) => {
-                old = get(conn, channel_key(c.guild_id().unwrap(), c.id())).await?;
-                del(conn, channel_key(c.guild_id().unwrap(), c.id())).await?;
+                old = get(conn, channel_key(c.id())).await?;
+                del(conn, channel_key(c.id())).await?;
             }
             _ => {}
         },
         Event::ChannelPinsUpdate(data) => match data.guild_id {
-            Some(guild_id) => {
-                let channel: Option<TextChannel> =
-                    get(conn, channel_key(guild_id, data.channel_id)).await?;
+            Some(_) => {
+                let channel: Option<TextChannel> = get(conn, channel_key(data.channel_id)).await?;
                 if let Some(mut channel) = channel {
                     channel.last_pin_timestamp = data.last_pin_timestamp.clone();
-                    set(conn, channel_key(guild_id, data.channel_id), &channel).await?;
+                    set(conn, channel_key(data.channel_id), &channel).await?;
                 }
             }
             None => {
                 let channel: Option<PrivateChannel> =
-                    get(conn, private_channel_key(data.channel_id)).await?;
+                    get(conn, channel_key(data.channel_id)).await?;
                 if let Some(mut channel) = channel {
                     channel.last_pin_timestamp = data.last_pin_timestamp.clone();
-                    set(conn, private_channel_key(data.channel_id), &channel).await?;
+                    set(conn, channel_key(data.channel_id), &channel).await?;
                 }
             }
         },
         Event::ChannelUpdate(data) => match &data.0 {
             Channel::Private(c) => {
-                old = get(conn, private_channel_key(c.id)).await?;
-                set(conn, private_channel_key(c.id), c).await?;
+                old = get(conn, channel_key(c.id)).await?;
+                set(conn, channel_key(c.id), c).await?;
             }
             Channel::Guild(c) => {
-                old = get(conn, channel_key(c.guild_id().unwrap(), c.id())).await?;
-                set(conn, channel_key(c.guild_id().unwrap(), c.id()), c).await?;
+                old = get(conn, channel_key(c.id())).await?;
+                set(conn, channel_key(c.id()), c).await?;
             }
             _ => {}
         },
@@ -417,10 +415,7 @@ pub async fn update(
                         channel.guild_id = Some(data.id);
                     }
                 }
-                items.push((
-                    channel_key(data.id, channel.id()),
-                    GuildItem::Channel(channel),
-                ));
+                items.push((channel_key(channel.id()), GuildItem::Channel(channel)));
             }
             for role in guild.roles.drain(..) {
                 items.push((role_key(data.id, role.id), GuildItem::Role(role)));
