@@ -118,6 +118,7 @@ async fn real_main() -> ApiResult<()> {
     let queue = get_queue();
     let clusters = get_clusters(resumes.clone(), queue).await?;
 
+    info!("Starting up {} clusters", clusters.len());
     info!("Starting up {} shards", shards);
     info!("Resuming {} sessions", resumes.len());
 
