@@ -21,7 +21,7 @@ use twilight_model::{
     channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel},
     gateway::event::Event,
     guild::{Emoji, Member, UnavailableGuild},
-    id::GuildId,
+    id::{GuildId, UserId},
 };
 
 pub async fn get<T: DeserializeOwned>(
@@ -340,7 +340,11 @@ async fn clear_guild<T: DeserializeOwned>(
     Ok(guild)
 }
 
-pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResult<Option<Value>> {
+pub async fn update(
+    conn: &mut redis::aio::Connection,
+    event: &Event,
+    bot_id: UserId,
+) -> ApiResult<Option<Value>> {
     let mut old: Option<Value> = None;
 
     match event {
@@ -428,7 +432,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
                 items.push((voice_key(data.id, voice.user_id), GuildItem::Voice(voice)));
             }
             for member in guild.members.drain(..) {
-                if CONFIG.state_member {
+                if CONFIG.state_member || member.user.id == bot_id {
                     items.push((
                         member_key(data.id, member.user.id),
                         GuildItem::Member(member),
@@ -522,7 +526,7 @@ pub async fn update(conn: &mut redis::aio::Connection, event: &Event) -> ApiResu
             }
         }
         Event::MemberUpdate(data) => {
-            if CONFIG.state_member {
+            if CONFIG.state_member || data.user.id == bot_id {
                 let member: Option<Member> =
                     get(conn, member_key(data.guild_id, data.user.id)).await?;
                 if let Some(mut member) = member {
