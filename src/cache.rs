@@ -1,9 +1,10 @@
 use crate::{
     config::CONFIG,
     constants::{
-        channel_key, emoji_key, guild_key, member_key, message_key, presence_key, role_key,
-        voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL, CACHE_DUMP_INTERVAL, CHANNEL_KEY,
-        EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX, MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
+        channel_key, emoji_key, guild_key, member_key, message_key, presence_key,
+        private_channel_key, role_key, voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL,
+        CACHE_DUMP_INTERVAL, CHANNEL_KEY, EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX,
+        MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
     },
     models::{ApiError, ApiResult, FormattedDateTime, GuildItem, SessionInfo, StatusInfo},
     utils::{get_keys, get_user_id, to_value},
@@ -105,29 +106,37 @@ pub async fn set_all<T: Serialize>(
         .iter()
         .map(|(key, value)| {
             let parts = get_keys(key);
+
+            let new_key = if parts.len() > 2 && parts[0] == CHANNEL_KEY {
+                format!("{}:{}", parts[0], parts[2])
+            } else {
+                key.clone()
+            };
+
             if parts.len() > 1 {
                 members
                     .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
                     .or_insert_with(Vec::new)
-                    .push(key);
+                    .push(new_key.clone());
             }
+
             if parts.len() > 2 && parts[0] != MESSAGE_KEY {
                 members
                     .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
                     .or_insert_with(Vec::new)
-                    .push(key);
+                    .push(new_key.clone());
             } else if parts.len() > 2 {
                 members
                     .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
                     .or_insert_with(Vec::new)
-                    .push(key);
+                    .push(new_key.clone());
             }
 
             simd_json::to_string(value)
-                .map(|value| (key, value))
+                .map(|value| (new_key, value))
                 .map_err(ApiError::from)
         })
-        .collect::<ApiResult<Vec<(&String, String)>>>()?;
+        .collect::<ApiResult<Vec<(String, String)>>>()?;
 
     conn.set_multiple(keys.as_slice()).await?;
 
@@ -176,36 +185,47 @@ pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiR
         return Ok(());
     }
 
+    let mut members = HashMap::new();
+
+    let keys = keys
+        .iter()
+        .map(|key| {
+            let parts = get_keys(key);
+
+            let new_key = if parts.len() > 2 && parts[0] == CHANNEL_KEY {
+                format!("{}:{}", parts[0], parts[2])
+            } else {
+                key.clone()
+            };
+
+            if parts.len() > 1 {
+                members
+                    .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
+                    .or_insert_with(Vec::new)
+                    .push(new_key.clone());
+            }
+
+            if parts.len() > 2 {
+                if parts[0] != MESSAGE_KEY {
+                    members
+                        .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
+                        .or_insert_with(Vec::new)
+                        .push(new_key.clone());
+                } else {
+                    members
+                        .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
+                        .or_insert_with(Vec::new)
+                        .push(new_key.clone());
+                }
+            }
+
+            new_key
+        })
+        .collect::<Vec<String>>();
+
     conn.del(keys).await?;
 
-    let mut all_keys = HashMap::new();
-
-    for key in keys {
-        let parts = get_keys(key);
-
-        if parts.len() > 1 {
-            all_keys
-                .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
-                .or_insert_with(Vec::new)
-                .push(key);
-        }
-
-        if parts.len() > 2 {
-            if parts[0] != MESSAGE_KEY {
-                all_keys
-                    .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
-                    .or_insert_with(Vec::new)
-                    .push(key);
-            } else {
-                all_keys
-                    .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
-                    .or_insert_with(Vec::new)
-                    .push(key);
-            }
-        }
-    }
-
-    for (key, value) in all_keys {
+    for (key, value) in members {
         conn.srem(key, value).await?;
     }
 
@@ -349,49 +369,50 @@ pub async fn update(
     match event {
         Event::ChannelCreate(data) => match &data.0 {
             Channel::Private(c) => {
-                set(conn, channel_key(c.id), c).await?;
+                set(conn, private_channel_key(c.id), c).await?;
             }
             Channel::Guild(c) => {
-                set(conn, channel_key(c.id()), c).await?;
+                set(conn, channel_key(c.guild_id().unwrap(), c.id()), c).await?;
             }
             _ => {}
         },
         Event::ChannelDelete(data) => match &data.0 {
             Channel::Private(c) => {
-                old = get(conn, channel_key(c.id)).await?;
-                del(conn, channel_key(c.id)).await?;
+                old = get(conn, private_channel_key(c.id)).await?;
+                del(conn, private_channel_key(c.id)).await?;
             }
             Channel::Guild(c) => {
-                old = get(conn, channel_key(c.id())).await?;
-                del(conn, channel_key(c.id())).await?;
+                old = get(conn, channel_key(c.guild_id().unwrap(), c.id())).await?;
+                del(conn, channel_key(c.guild_id().unwrap(), c.id())).await?;
             }
             _ => {}
         },
         Event::ChannelPinsUpdate(data) => match data.guild_id {
-            Some(_) => {
-                let channel: Option<TextChannel> = get(conn, channel_key(data.channel_id)).await?;
+            Some(guild_id) => {
+                let channel: Option<TextChannel> =
+                    get(conn, channel_key(guild_id, data.channel_id)).await?;
                 if let Some(mut channel) = channel {
                     channel.last_pin_timestamp = data.last_pin_timestamp.clone();
-                    set(conn, channel_key(data.channel_id), &channel).await?;
+                    set(conn, channel_key(guild_id, data.channel_id), &channel).await?;
                 }
             }
             None => {
                 let channel: Option<PrivateChannel> =
-                    get(conn, channel_key(data.channel_id)).await?;
+                    get(conn, private_channel_key(data.channel_id)).await?;
                 if let Some(mut channel) = channel {
                     channel.last_pin_timestamp = data.last_pin_timestamp.clone();
-                    set(conn, channel_key(data.channel_id), &channel).await?;
+                    set(conn, private_channel_key(data.channel_id), &channel).await?;
                 }
             }
         },
         Event::ChannelUpdate(data) => match &data.0 {
             Channel::Private(c) => {
-                old = get(conn, channel_key(c.id)).await?;
-                set(conn, channel_key(c.id), c).await?;
+                old = get(conn, private_channel_key(c.id)).await?;
+                set(conn, private_channel_key(c.id), c).await?;
             }
             Channel::Guild(c) => {
-                old = get(conn, channel_key(c.id())).await?;
-                set(conn, channel_key(c.id()), c).await?;
+                old = get(conn, channel_key(c.guild_id().unwrap(), c.id())).await?;
+                set(conn, channel_key(c.guild_id().unwrap(), c.id()), c).await?;
             }
             _ => {}
         },
@@ -415,7 +436,10 @@ pub async fn update(
                         channel.guild_id = Some(data.id);
                     }
                 }
-                items.push((channel_key(channel.id()), GuildItem::Channel(channel)));
+                items.push((
+                    channel_key(data.id, channel.id()),
+                    GuildItem::Channel(channel),
+                ));
             }
             for role in guild.roles.drain(..) {
                 items.push((role_key(data.id, role.id), GuildItem::Role(role)));
