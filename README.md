@@ -72,13 +72,12 @@ for the `MESSAGE_DELETE` event and such.
 | ------------------------------- | -------------------------------- |
 | `bot_user`                      | Bot user object.                 |
 | `guild:guild_id`                | Guild object.                    |
-| `channel:guild_id:channel_id`   | Guild channel object.            |
 | `role:guild_id:role_id`         | Guild role object.               |
 | `emoji:guild_id:emoji_id`       | Guild emoji object.              |
 | `member:guild_id:user_id`       | Guild member object.             |
 | `presence:guild_id:user_id`     | Guild member presence object.    |
 | `voice:guild_id:user_id`        | Guild member voice state object. |
-| `channel:channel_id`            | Private channel object.          |
+| `channel:channel_id`            | Channel object.                  |
 | `message:channel_id:message_id` | Channel message object.          |
 
 There are additionally some helper keys for state cache below, stored as sets.

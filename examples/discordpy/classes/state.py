@@ -117,8 +117,7 @@ class State:
         return [Guild(state=self, data=x) for x in await self._members_get_all("guild")]
 
     async def _private_channels(self):
-        results = await self._members_get_all("channel", predicate=lambda x: len(x.split(":")) <= 2)
-        return [DMChannel(me=self.user, state=self, data=x) for x in results if not x["guild_id"]]
+        return []
 
     async def _messages(self):
         results = await self._members_get_all("message")
@@ -254,7 +253,7 @@ class State:
         return
 
     async def _get_guild_channel(self, channel_id):
-        result = await self._members_get("channel", second=channel_id)
+        result = await self._get(f"channel:{channel_id}")
         if result:
             factory, _ = _channel_factory(result["type"])
             guild = await self._get_guild(self._key_first(result))
