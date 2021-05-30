@@ -2,8 +2,8 @@ use crate::{
     cache,
     config::CONFIG,
     constants::{
-        CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, JOIN_COLOR, LEAVE_COLOR, READY_COLOR,
-        RESUME_COLOR,
+        CONNECT_COLOR, DISCONNECT_COLOR, EXCHANGE, JOIN_COLOR, LEAVE_COLOR, QUEUE_SEND,
+        READY_COLOR, RESUME_COLOR,
     },
     metrics::{GATEWAY_EVENTS, GUILD_EVENTS, SHARD_EVENTS},
     models::{DeliveryInfo, DeliveryOpcode, PayloadInfo},
@@ -12,8 +12,9 @@ use crate::{
 
 use futures_util::StreamExt;
 use lapin::{
-    options::{BasicAckOptions, BasicPublishOptions},
-    BasicProperties, Consumer,
+    options::{BasicAckOptions, BasicConsumeOptions, BasicPublishOptions},
+    types::FieldTable,
+    BasicProperties, Channel,
 };
 use simd_json::{json, ValueAccess};
 use tracing::{info, warn};
@@ -21,8 +22,8 @@ use twilight_gateway::{Cluster, Event};
 
 pub async fn outgoing(
     conn: &mut redis::aio::Connection,
-    cluster: Cluster,
-    channel: lapin::Channel,
+    cluster: &mut Cluster,
+    channel: &mut lapin::Channel,
 ) {
     let shard_strings: Vec<String> = (0..CONFIG.shards_total).map(|x| x.to_string()).collect();
 
@@ -62,7 +63,7 @@ pub async fn outgoing(
             }
             Event::Ready(data) => {
                 info!("[Shard {}] Ready (session: {})", shard, data.session_id);
-                log_discord(&cluster, READY_COLOR, format!("[Shard {}] Ready", shard));
+                log_discord(cluster, READY_COLOR, format!("[Shard {}] Ready", shard));
                 SHARD_EVENTS.with_label_values(&["Ready"]).inc();
             }
             Event::Resumed => {
@@ -75,13 +76,13 @@ pub async fn outgoing(
                 } else {
                     info!("[Shard {}] Resumed", shard);
                 }
-                log_discord(&cluster, RESUME_COLOR, format!("[Shard {}] Resumed", shard));
+                log_discord(cluster, RESUME_COLOR, format!("[Shard {}] Resumed", shard));
                 SHARD_EVENTS.with_label_values(&["Resumed"]).inc();
             }
             Event::ShardConnected(_) => {
                 info!("[Shard {}] Connected", shard);
                 log_discord(
-                    &cluster,
+                    cluster,
                     CONNECT_COLOR,
                     format!("[Shard {}] Connected", shard),
                 );
@@ -106,7 +107,7 @@ pub async fn outgoing(
                     info!("[Shard {}] Disconnected", shard);
                 }
                 log_discord(
-                    &cluster,
+                    cluster,
                     DISCONNECT_COLOR,
                     format!("[Shard {}] Disconnected", shard),
                 );
@@ -171,7 +172,7 @@ pub async fn outgoing(
                 if old.is_none() {
                     GUILD_EVENTS.with_label_values(&["Join"]).inc();
                     log_discord_guild(
-                        &cluster,
+                        cluster,
                         JOIN_COLOR,
                         "Guild Join",
                         format!("{} ({})", data.name, data.id),
@@ -184,7 +185,7 @@ pub async fn outgoing(
                     let old_data = old.unwrap_or(json!({}));
                     let guild = old_data.as_object().unwrap();
                     log_discord_guild(
-                        &cluster,
+                        cluster,
                         LEAVE_COLOR,
                         "Guild Leave",
                         format!(
@@ -206,7 +207,23 @@ pub async fn outgoing(
     }
 }
 
-pub async fn incoming(clusters: Vec<Cluster>, mut consumer: Consumer) {
+pub async fn incoming(clusters: &mut [Cluster], channel: &mut Channel) {
+    let mut consumer = match channel
+        .basic_consume(
+            QUEUE_SEND,
+            "",
+            BasicConsumeOptions::default(),
+            FieldTable::default(),
+        )
+        .await
+    {
+        Ok(channel) => channel,
+        Err(err) => {
+            warn!("Failed to consume delivery channel: {:?}", err);
+            return;
+        }
+    };
+
     while let Some(message) = consumer.next().await {
         match message {
             Ok((channel, mut delivery)) => {
