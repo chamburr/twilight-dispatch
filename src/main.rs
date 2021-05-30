@@ -151,7 +151,9 @@ async fn real_main() -> ApiResult<()> {
         let cluster_clone = cluster.clone();
         let channel_clone = channel.clone();
         tokio::spawn(async move {
-            handler::outgoing(&mut conn_clone, cluster_clone, channel_clone).await;
+            loop {
+                handler::outgoing(&mut conn_clone, cluster_clone, channel_clone).await;
+            }
         });
     }
 
@@ -165,7 +167,9 @@ async fn real_main() -> ApiResult<()> {
         .await?;
     let clusters_clone = clusters.clone();
     tokio::spawn(async move {
-        handler::incoming(clusters_clone, consumer).await;
+        loop {
+            handler::incoming(clusters_clone, consumer).await;
+        }
     });
 
     ctrl_c().await?;
