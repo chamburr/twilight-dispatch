@@ -10,7 +10,7 @@ use crate::{
 
 use dotenv::dotenv;
 use lapin::{
-    options::{BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions},
+    options::{ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions},
     types::FieldTable,
     ExchangeKind,
 };
@@ -148,27 +148,20 @@ async fn real_main() -> ApiResult<()> {
         });
 
         let mut conn_clone = redis.get_async_connection().await?;
-        let cluster_clone = cluster.clone();
-        let channel_clone = channel.clone();
+        let mut cluster_clone = cluster.clone();
+        let mut channel_clone = channel.clone();
         tokio::spawn(async move {
             loop {
-                handler::outgoing(&mut conn_clone, cluster_clone, channel_clone).await;
+                handler::outgoing(&mut conn_clone, &mut cluster_clone, &mut channel_clone).await;
             }
         });
     }
 
-    let consumer = channel_send
-        .basic_consume(
-            QUEUE_SEND,
-            "",
-            BasicConsumeOptions::default(),
-            FieldTable::default(),
-        )
-        .await?;
-    let clusters_clone = clusters.clone();
+    let mut channel_clone = channel_send.clone();
+    let mut clusters_clone = clusters.clone();
     tokio::spawn(async move {
         loop {
-            handler::incoming(clusters_clone, consumer).await;
+            handler::incoming(clusters_clone.as_mut_slice(), &mut channel_clone).await;
         }
     });
 
