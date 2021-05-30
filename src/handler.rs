@@ -246,8 +246,8 @@ pub async fn incoming(clusters: &mut [Cluster], channel: &mut Channel) {
                                     }
                                 }
                                 DeliveryOpcode::Reconnect => {
-                                    // Currently noop as twilight-gateway does not support this.
-                                    // See https://github.com/twilight-rs/twilight/issues/615.
+                                    info!("Shutting down shard {}", payload.shard);
+                                    cluster.shard(payload.shard).unwrap().shutdown();
                                 }
                             }
                         } else {
