@@ -16,7 +16,7 @@ use lapin::{
 };
 use std::collections::HashMap;
 use tokio::{join, signal::ctrl_c};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 mod cache;
 mod config;
@@ -153,6 +153,7 @@ async fn real_main() -> ApiResult<()> {
         tokio::spawn(async move {
             loop {
                 handler::outgoing(&mut conn_clone, &mut cluster_clone, &mut channel_clone).await;
+                warn!("Outgoing handler ended unexpectedly, restarting.");
             }
         });
     }
@@ -162,6 +163,7 @@ async fn real_main() -> ApiResult<()> {
     tokio::spawn(async move {
         loop {
             handler::incoming(clusters_clone.as_mut_slice(), &mut channel_clone).await;
+            warn!("Outgoing handler ended unexpectedly, restarting.");
         }
     });
 
