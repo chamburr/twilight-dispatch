@@ -77,10 +77,11 @@ pub async fn outgoing(
                         warn!("[Shard {}] Failed to update state: {:?}", shard, err);
                     }
                 }
-                // testing code
-                count.fetch_add(1, Ordering::SeqCst);
             }
         }
+
+        // testing code
+        count.fetch_add(1, Ordering::SeqCst);
 
         match event {
             Event::GatewayHello(data) => {
