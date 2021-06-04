@@ -175,9 +175,6 @@ pub async fn outgoing(
                                         )
                                         .await;
 
-                                    // testing code
-                                    count.fetch_add(1, Ordering::SeqCst);
-
                                     if let Err(err) = result {
                                         warn!(
                                             "[Shard {}] Failed to publish event: {:?}",
