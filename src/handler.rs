@@ -20,13 +20,6 @@ use simd_json::{json, ValueAccess};
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
-// testing code
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
-};
-use tokio::time::{sleep, Duration};
-
 pub async fn outgoing(
     conn: &mut redis::aio::Connection,
     cluster: &mut Cluster,
@@ -38,26 +31,7 @@ pub async fn outgoing(
 
     let mut bot_id = None;
 
-    // testing code
-    let count = Arc::new(AtomicU64::new(0));
-    let count_clone = count.clone();
-    tokio::spawn(async move {
-        let mut last = 0 as u64;
-        loop {
-            sleep(Duration::from_secs(1)).await;
-            let new = count_clone.load(Ordering::SeqCst);
-            if last == new {
-                warn!("{}", last);
-            } else {
-                last = new;
-            }
-        }
-    });
-
     while let Some((shard, event)) = events.next().await {
-        // testing code
-        count.fetch_add(1, Ordering::SeqCst);
-
         let mut old = None;
         let shard = shard as usize;
 
@@ -233,9 +207,6 @@ pub async fn outgoing(
             }
             _ => {}
         }
-
-        // testing code
-        count.fetch_add(1, Ordering::SeqCst);
     }
 }
 
