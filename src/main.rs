@@ -18,7 +18,7 @@ use lapin::{
 };
 use std::collections::HashMap;
 use tokio::{join, signal::ctrl_c};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 mod cache;
 mod config;
@@ -118,7 +118,7 @@ async fn real_main() -> ApiResult<()> {
     let shards = get_shards();
     let resumes = get_resume_sessions(&mut conn).await?;
     let queue = get_queue();
-    let clusters = get_clusters(resumes.clone(), queue).await?;
+    let (clusters, events) = get_clusters(resumes.clone(), queue).await?;
 
     info!("Starting up {} clusters", clusters.len());
     info!("Starting up {} shards", shards);
@@ -143,7 +143,7 @@ async fn real_main() -> ApiResult<()> {
         )
     });
 
-    for cluster in clusters.clone() {
+    for (cluster, events) in clusters.clone().into_iter().zip(events.into_iter()) {
         let cluster_clone = cluster.clone();
         tokio::spawn(async move {
             cluster_clone.up().await;
@@ -153,20 +153,20 @@ async fn real_main() -> ApiResult<()> {
         let mut cluster_clone = cluster.clone();
         let mut channel_clone = channel.clone();
         tokio::spawn(async move {
-            loop {
-                handler::outgoing(&mut conn_clone, &mut cluster_clone, &mut channel_clone).await;
-                warn!("Outgoing handler ended unexpectedly, restarting.");
-            }
+            handler::outgoing(
+                &mut conn_clone,
+                &mut cluster_clone,
+                &mut channel_clone,
+                events,
+            )
+            .await;
         });
     }
 
     let mut channel_clone = channel_send.clone();
     let mut clusters_clone = clusters.clone();
     tokio::spawn(async move {
-        loop {
-            handler::incoming(clusters_clone.as_mut_slice(), &mut channel_clone).await;
-            warn!("Outgoing handler ended unexpectedly, restarting.");
-        }
+        handler::incoming(clusters_clone.as_mut_slice(), &mut channel_clone).await;
     });
 
     ctrl_c().await?;
