@@ -1,5 +1,7 @@
 #![recursion_limit = "128"]
 #![deny(clippy::all, nonstandard_style, rust_2018_idioms, unused, warnings)]
+// https://github.com/rust-lang/rust-clippy/issues/7422
+#![allow(clippy::nonstandard_macro_braces)]
 
 use crate::{
     config::CONFIG,
