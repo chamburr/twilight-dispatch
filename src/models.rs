@@ -145,19 +145,19 @@ pub type ApiResult<T> = Result<T, ApiError>;
 
 #[derive(Debug)]
 pub enum ApiError {
-    EmptyError(()),
-    SimdJsonError(SimdJsonError),
-    RedisError(RedisError),
-    VarError(VarError),
-    ParseIntError(ParseIntError),
-    LapinError(LapinError),
-    ClusterStartError(ClusterStartError),
-    LargeThresholdError(LargeThresholdError),
-    HyperError(HyperError),
-    HyperHttpError(HyperHTTPError),
-    AddrParseError(AddrParseError),
-    PrometheusError(PrometheusError),
-    IoError(IoError),
+    Empty(()),
+    SimdJson(SimdJsonError),
+    Redis(RedisError),
+    Var(VarError),
+    ParseInt(ParseIntError),
+    Lapin(LapinError),
+    ClusterStart(ClusterStartError),
+    LargeThreshold(LargeThresholdError),
+    Hyper(HyperError),
+    HyperHttp(HyperHTTPError),
+    AddrParse(AddrParseError),
+    Prometheus(PrometheusError),
+    Io(IoError),
 }
 
 impl Error for ApiError {}
@@ -170,78 +170,78 @@ impl Display for ApiError {
 
 impl From<()> for ApiError {
     fn from(_: ()) -> Self {
-        Self::EmptyError(())
+        Self::Empty(())
     }
 }
 
 impl From<SimdJsonError> for ApiError {
     fn from(err: SimdJsonError) -> Self {
-        Self::SimdJsonError(err)
+        Self::SimdJson(err)
     }
 }
 
 impl From<RedisError> for ApiError {
     fn from(err: RedisError) -> Self {
-        Self::RedisError(err)
+        Self::Redis(err)
     }
 }
 
 impl From<VarError> for ApiError {
     fn from(err: VarError) -> Self {
-        Self::VarError(err)
+        Self::Var(err)
     }
 }
 
 impl From<ParseIntError> for ApiError {
     fn from(err: ParseIntError) -> Self {
-        Self::ParseIntError(err)
+        Self::ParseInt(err)
     }
 }
 
 impl From<LapinError> for ApiError {
     fn from(err: LapinError) -> Self {
-        Self::LapinError(err)
+        Self::Lapin(err)
     }
 }
 
 impl From<ClusterStartError> for ApiError {
     fn from(err: ClusterStartError) -> Self {
-        Self::ClusterStartError(err)
+        Self::ClusterStart(err)
     }
 }
 
 impl From<LargeThresholdError> for ApiError {
     fn from(err: LargeThresholdError) -> Self {
-        Self::LargeThresholdError(err)
+        Self::LargeThreshold(err)
     }
 }
 
 impl From<HyperError> for ApiError {
     fn from(err: HyperError) -> Self {
-        Self::HyperError(err)
+        Self::Hyper(err)
     }
 }
 
 impl From<HyperHTTPError> for ApiError {
     fn from(err: HyperHTTPError) -> Self {
-        Self::HyperHttpError(err)
+        Self::HyperHttp(err)
     }
 }
 
 impl From<AddrParseError> for ApiError {
     fn from(err: AddrParseError) -> Self {
-        Self::AddrParseError(err)
+        Self::AddrParse(err)
     }
 }
 
 impl From<PrometheusError> for ApiError {
     fn from(err: PrometheusError) -> Self {
-        Self::PrometheusError(err)
+        Self::Prometheus(err)
     }
 }
 
 impl From<IoError> for ApiError {
     fn from(err: IoError) -> Self {
-        Self::IoError(err)
+        Self::Io(err)
     }
 }
