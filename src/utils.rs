@@ -5,6 +5,7 @@ use crate::{
     models::{ApiResult, SessionInfo},
 };
 
+use futures_util::Stream;
 use serde::Serialize;
 use simd_json::owned::Value;
 use std::{collections::HashMap, fmt::Debug, future::Future, pin::Pin, sync::Arc, time::Duration};
@@ -18,12 +19,13 @@ use tokio::{
 };
 use tracing::warn;
 use twilight_gateway::{
-    cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, EventTypeFlags, Intents,
+    cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, Event, EventTypeFlags,
+    Intents,
 };
 use twilight_model::{
     channel::embed::Embed,
     gateway::{
-        payload::update_status::UpdateStatusInfo,
+        payload::update_presence::UpdatePresencePayload,
         presence::{Activity, UserOrId},
     },
     id::{ChannelId, UserId},
@@ -109,12 +111,16 @@ pub fn get_user_id(user: &UserOrId) -> UserId {
 pub async fn get_clusters(
     resumes: HashMap<u64, ResumeSession>,
     queue: Arc<Box<dyn Queue>>,
-) -> ApiResult<Vec<Cluster>> {
+) -> ApiResult<(
+    Vec<Cluster>,
+    Vec<impl Stream<Item = (u64, Event)> + Send + Sync + Unpin + 'static>,
+)> {
     let shards = get_shards();
     let base = shards / CONFIG.clusters;
     let extra = shards % CONFIG.clusters;
 
     let mut clusters = vec![];
+    let mut events = vec![];
     let mut last_index = CONFIG.shards_start;
 
     for i in 0..CONFIG.clusters {
@@ -124,7 +130,7 @@ pub async fn get_clusters(
             last_index + base - 1
         };
 
-        let cluster = Cluster::builder(
+        let (cluster, event) = Cluster::builder(
             CONFIG.bot_token.clone(),
             Intents::from_bits(CONFIG.intents).unwrap(),
         )
@@ -135,40 +141,45 @@ pub async fn get_clusters(
             total: CONFIG.shards_total,
         })
         .queue(queue.clone())
-        .presence(UpdateStatusInfo::new(
-            vec![Activity {
-                application_id: None,
-                assets: None,
-                buttons: Vec::new(),
-                created_at: None,
-                details: None,
-                emoji: None,
-                flags: None,
-                id: None,
-                instance: None,
-                kind: CONFIG.activity_type,
-                name: CONFIG.activity_name.clone(),
-                party: None,
-                secrets: None,
-                state: None,
-                timestamps: None,
-                url: None,
-            }],
-            false,
-            None,
-            CONFIG.status,
-        ))
+        .presence(
+            UpdatePresencePayload::new(
+                vec![Activity {
+                    application_id: None,
+                    assets: None,
+                    buttons: Vec::new(),
+                    created_at: None,
+                    details: None,
+                    emoji: None,
+                    flags: None,
+                    id: None,
+                    instance: None,
+                    kind: CONFIG.activity_type,
+                    name: CONFIG.activity_name.clone(),
+                    party: None,
+                    secrets: None,
+                    state: None,
+                    timestamps: None,
+                    url: None,
+                }],
+                false,
+                None,
+                CONFIG.status,
+            )
+            .unwrap(),
+        )
         .large_threshold(CONFIG.large_threshold)?
         .resume_sessions(resumes.clone())
+        .event_types(get_event_flags())
         .build()
         .await?;
 
         clusters.push(cluster);
+        events.push(event);
 
         last_index = index + 1;
     }
 
-    Ok(clusters)
+    Ok((clusters, events))
 }
 
 pub fn get_queue() -> Arc<Box<dyn Queue>> {

@@ -7,10 +7,10 @@ use crate::{
     },
     metrics::{GATEWAY_EVENTS, GUILD_EVENTS, SHARD_EVENTS},
     models::{DeliveryInfo, DeliveryOpcode, PayloadInfo},
-    utils::{get_event_flags, log_discord, log_discord_guild},
+    utils::{log_discord, log_discord_guild},
 };
 
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 use lapin::{
     options::{BasicAckOptions, BasicConsumeOptions, BasicPublishOptions},
     types::FieldTable,
@@ -26,10 +26,9 @@ pub async fn outgoing(
     conn: &mut redis::aio::Connection,
     cluster: &mut Cluster,
     channel: &mut lapin::Channel,
+    mut events: impl Stream<Item = (u64, Event)> + Send + Sync + Unpin + 'static,
 ) {
     let shard_strings: Vec<String> = (0..CONFIG.shards_total).map(|x| x.to_string()).collect();
-
-    let mut events = cluster.some_events(get_event_flags());
 
     let mut bot_id = None;
 
