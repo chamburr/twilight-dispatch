@@ -63,9 +63,6 @@ pub async fn outgoing(
             }
         }
 
-        // testing code
-        count.fetch_add(1, Ordering::SeqCst);
-
         match event {
             Event::GatewayHello(data) => {
                 info!("[Shard {}] Hello (heartbeat interval: {})", shard, data);
