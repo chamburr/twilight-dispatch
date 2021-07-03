@@ -17,6 +17,8 @@ use lapin::{
     BasicProperties, Channel,
 };
 use simd_json::{json, ValueAccess};
+use std::time::Duration;
+use tokio::time::timeout;
 use tracing::{info, warn};
 use twilight_gateway::{Cluster, Event};
 
@@ -43,12 +45,20 @@ pub async fn outgoing(
             }
 
             if let Some(bot_id) = bot_id {
-                match cache::update(conn, &event, bot_id).await {
-                    Ok(value) => {
+                match timeout(
+                    Duration::from_millis(500),
+                    cache::update(conn, &event, bot_id),
+                )
+                .await
+                {
+                    Ok(Ok(value)) => {
                         old = value;
                     }
-                    Err(err) => {
+                    Ok(Err(err)) => {
                         warn!("[Shard {}] Failed to update state: {:?}", shard, err);
+                    }
+                    Err(_) => {
+                        warn!("[Shard {}] Timed out while updating state", shard);
                     }
                 }
             }
