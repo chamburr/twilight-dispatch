@@ -45,7 +45,7 @@ pub async fn outgoing(
 
             if let Some(bot_id) = bot_id {
                 match timeout(
-                    Duration::from_millis(500),
+                    Duration::from_millis(10000),
                     cache::update(conn, &event, bot_id),
                 )
                 .await
