@@ -117,12 +117,13 @@ async fn real_main() -> ApiResult<()> {
 
     let shards = get_shards();
     let resumes = get_resume_sessions(&mut conn).await?;
+    let resumes_len = resumes.len();
     let queue = get_queue();
-    let (clusters, events) = get_clusters(resumes.clone(), queue).await?;
+    let (clusters, events) = get_clusters(resumes, queue).await?;
 
     info!("Starting up {} clusters", clusters.len());
     info!("Starting up {} shards", shards);
-    info!("Resuming {} sessions", resumes.len());
+    info!("Resuming {} sessions", resumes_len);
 
     cache::set(&mut conn, STARTED_KEY, &FormattedDateTime::now()).await?;
     cache::set(&mut conn, SHARDS_KEY, &CONFIG.shards_total).await?;

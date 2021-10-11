@@ -10,25 +10,25 @@ use crate::{
     utils::{get_keys, get_user_id, to_value},
 };
 
-use redis::{AsyncCommands, FromRedisValue};
+use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
 use serde::{de::DeserializeOwned, Serialize};
 use simd_json::owned::Value;
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, iter};
 use tokio::time::{sleep, Duration};
 use tracing::warn;
 use twilight_gateway::Cluster;
 use twilight_model::{
     channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel},
     gateway::event::Event,
-    guild::{Emoji, Member, UnavailableGuild},
+    guild::{Emoji, Member},
     id::{GuildId, UserId},
 };
 
 pub async fn get<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl AsRef<str>,
 ) -> ApiResult<Option<T>> {
-    let res: Option<String> = conn.get(key.to_string()).await?;
+    let res: Option<String> = conn.get(key.as_ref()).await?;
 
     Ok(res
         .map(|mut value| simd_json::from_str(value.as_mut_str()))
@@ -57,60 +57,59 @@ pub async fn get_all<T: DeserializeOwned>(
 
 pub async fn get_members<T: FromRedisValue>(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl AsRef<str>,
 ) -> ApiResult<Vec<T>> {
-    let res = conn.smembers(key.to_string()).await?;
+    let res = conn.smembers(key.as_ref()).await?;
 
     Ok(res)
 }
 
 pub async fn get_members_len(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl AsRef<str>,
 ) -> ApiResult<u64> {
-    let res = conn.scard(key.to_string()).await?;
+    let res = conn.scard(key.as_ref()).await?;
 
     Ok(res)
 }
 
 pub async fn get_hashmap<T: FromRedisValue + Eq + Hash, U: FromRedisValue>(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl AsRef<str>,
 ) -> ApiResult<HashMap<T, U>> {
-    let res = conn.hgetall(key.to_string()).await?;
+    let res = conn.hgetall(key.as_ref()).await?;
 
     Ok(res)
 }
 
 pub async fn set<T: Serialize>(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl AsRef<str>,
     value: &T,
 ) -> ApiResult<()> {
-    set_all(conn, &[(key.to_string(), value)]).await?;
+    set_all(conn, iter::once((key, value))).await?;
 
     Ok(())
 }
 
-pub async fn set_all<T: Serialize>(
-    conn: &mut redis::aio::Connection,
-    keys: &[(String, T)],
-) -> ApiResult<()> {
-    if keys.is_empty() {
-        return Ok(());
-    }
-
+pub async fn set_all<T, I, S>(conn: &mut redis::aio::Connection, keys: I) -> ApiResult<()>
+where
+    T: Serialize,
+    S: AsRef<str>,
+    I: IntoIterator<Item = (S, T)>,
+{
     let mut members = HashMap::new();
 
     let keys = keys
-        .iter()
+        .into_iter()
         .map(|(key, value)| {
+            let key = key.as_ref();
             let parts = get_keys(key);
 
             let new_key = if parts.len() > 2 && parts[0] == CHANNEL_KEY {
                 format!("{}:{}", parts[0], parts[2])
             } else {
-                key.clone()
+                key.to_owned()
             };
 
             if parts.len() > 1 {
@@ -132,11 +131,15 @@ pub async fn set_all<T: Serialize>(
                     .push(new_key.clone());
             }
 
-            simd_json::to_string(value)
+            simd_json::to_string(&value)
                 .map(|value| (new_key, value))
                 .map_err(ApiError::from)
         })
         .collect::<ApiResult<Vec<(String, String)>>>()?;
+
+    if keys.is_empty() {
+        return Ok(());
+    }
 
     conn.set_multiple(keys.as_slice()).await?;
 
@@ -149,53 +152,54 @@ pub async fn set_all<T: Serialize>(
 
 pub async fn expire(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl Into<CustomCow<'_>>,
     expiry: u64,
 ) -> ApiResult<()> {
-    expire_all(conn, &[(key.to_string(), expiry)]).await?;
+    expire_all(conn, iter::once((key, expiry))).await?;
 
     Ok(())
 }
 
-pub async fn expire_all(
+pub async fn expire_all<'c, C: Into<CustomCow<'c>>>(
     conn: &mut redis::aio::Connection,
-    keys: &[(String, u64)],
+    keys: impl IntoIterator<Item = (C, u64)>,
 ) -> ApiResult<()> {
+    let keys = keys
+        .into_iter()
+        .map(|(key, value)| {
+            let timestamp = FormattedDateTime::now() + time::Duration::milliseconds(value as i64);
+
+            simd_json::to_string(&timestamp)
+                .map(|value| (key.into(), value))
+                .map_err(ApiError::from)
+        })
+        .collect::<ApiResult<Vec<(CustomCow<'_>, String)>>>()?;
+
     if keys.is_empty() {
         return Ok(());
     }
-
-    let keys = keys
-        .iter()
-        .map(|(key, value)| {
-            let timestamp = FormattedDateTime::now() + time::Duration::milliseconds(*value as i64);
-            simd_json::to_string(&timestamp)
-                .map(|value| (key, value))
-                .map_err(ApiError::from)
-        })
-        .collect::<ApiResult<Vec<(&String, String)>>>()?;
 
     conn.hset_multiple(EXPIRY_KEYS, keys.as_slice()).await?;
 
     Ok(())
 }
 
-pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiResult<()> {
-    if keys.is_empty() {
-        return Ok(());
-    }
-
+pub async fn del_all<I: IntoIterator<Item = S>, S: AsRef<str>>(
+    conn: &mut redis::aio::Connection,
+    keys: I,
+) -> ApiResult<()> {
     let mut members = HashMap::new();
 
     let keys = keys
-        .iter()
+        .into_iter()
         .map(|key| {
+            let key = key.as_ref();
             let parts = get_keys(key);
 
             let new_key = if parts.len() > 2 && parts[0] == CHANNEL_KEY {
                 format!("{}:{}", parts[0], parts[2])
             } else {
-                key.clone()
+                key.to_owned()
             };
 
             if parts.len() > 1 {
@@ -223,6 +227,10 @@ pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiR
         })
         .collect::<Vec<String>>();
 
+    if keys.is_empty() {
+        return Ok(());
+    }
+
     conn.del(keys).await?;
 
     for (key, value) in members {
@@ -232,22 +240,22 @@ pub async fn del_all(conn: &mut redis::aio::Connection, keys: &[String]) -> ApiR
     Ok(())
 }
 
-pub async fn del(conn: &mut redis::aio::Connection, key: impl ToString) -> ApiResult<()> {
-    del_all(conn, &[key.to_string()]).await?;
+pub async fn del(conn: &mut redis::aio::Connection, key: impl AsRef<str>) -> ApiResult<()> {
+    del_all(conn, iter::once(key)).await?;
 
     Ok(())
 }
 
 pub async fn del_hashmap(
     conn: &mut redis::aio::Connection,
-    key: impl ToString,
+    key: impl AsRef<str>,
     keys: &[String],
 ) -> ApiResult<()> {
     if keys.is_empty() {
         return Ok(());
     }
 
-    let _: () = conn.hdel(key.to_string(), keys).await?;
+    let _: () = conn.hdel(key.as_ref(), keys).await?;
 
     Ok(())
 }
@@ -466,17 +474,13 @@ pub async fn update(
             }
             items.push((guild_key(data.id), GuildItem::Guild(guild)));
 
-            set_all(conn, items.as_slice()).await?;
+            set_all(conn, items).await?;
             if CONFIG.state_member {
                 expire_all(
                     conn,
-                    data.members
-                        .iter()
-                        .map(|member| {
-                            (member_key(data.id, member.user.id), CONFIG.state_member_ttl)
-                        })
-                        .collect::<Vec<(String, u64)>>()
-                        .as_slice(),
+                    data.members.iter().map(|member| {
+                        (member_key(data.id, member.user.id), CONFIG.state_member_ttl)
+                    }),
                 )
                 .await?;
             }
@@ -513,9 +517,7 @@ pub async fn update(
                 conn,
                 data.emojis
                     .iter()
-                    .map(|emoji| (emoji_key(data.guild_id, emoji.id), emoji))
-                    .collect::<Vec<(String, &Emoji)>>()
-                    .as_slice(),
+                    .map(|emoji| (emoji_key(data.guild_id, emoji.id), emoji)),
             )
             .await?;
             old = Some(to_value(&emojis)?);
@@ -571,23 +573,17 @@ pub async fn update(
                     conn,
                     data.members
                         .iter()
-                        .map(|member| (member_key(data.guild_id, member.user.id), member))
-                        .collect::<Vec<(String, &Member)>>()
-                        .as_slice(),
+                        .map(|member| (member_key(data.guild_id, member.user.id), member)),
                 )
                 .await?;
                 expire_all(
                     conn,
-                    data.members
-                        .iter()
-                        .map(|member| {
-                            (
-                                member_key(data.guild_id, member.user.id),
-                                CONFIG.state_member_ttl,
-                            )
-                        })
-                        .collect::<Vec<(String, u64)>>()
-                        .as_slice(),
+                    data.members.iter().map(|member| {
+                        (
+                            member_key(data.guild_id, member.user.id),
+                            CONFIG.state_member_ttl,
+                        )
+                    }),
                 )
                 .await?;
             }
@@ -686,11 +682,7 @@ pub async fn update(
             set(conn, BOT_USER_KEY, &data.user).await?;
             set_all(
                 conn,
-                data.guilds
-                    .iter()
-                    .map(|guild| (guild_key(guild.id), guild))
-                    .collect::<Vec<(String, &UnavailableGuild)>>()
-                    .as_slice(),
+                data.guilds.iter().map(|guild| (guild_key(guild.id), guild)),
             )
             .await?;
         }
@@ -730,4 +722,44 @@ pub async fn update(
     }
 
     Ok(old)
+}
+
+// Since `std::borrow::Cow` does not implement `ToRedisArgs`,
+// we create our own and implement it ourselves
+pub enum CustomCow<'s> {
+    Owned(String),
+    Borrowed(&'s str),
+}
+
+impl<'s> From<String> for CustomCow<'s> {
+    fn from(o: String) -> Self {
+        Self::Owned(o)
+    }
+}
+
+impl<'s> From<&'s str> for CustomCow<'s> {
+    fn from(b: &'s str) -> Self {
+        Self::Borrowed(b)
+    }
+}
+
+impl<'s> Clone for CustomCow<'s> {
+    fn clone(&self) -> Self {
+        match *self {
+            Self::Owned(ref o) => Self::Owned(o.to_owned()),
+            Self::Borrowed(b) => Self::Borrowed(b),
+        }
+    }
+}
+
+impl<'s> ToRedisArgs for CustomCow<'s> {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + redis::RedisWrite,
+    {
+        match *self {
+            Self::Owned(ref o) => o.write_redis_args(out),
+            Self::Borrowed(b) => b.write_redis_args(out),
+        }
+    }
 }

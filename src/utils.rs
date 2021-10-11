@@ -351,10 +351,6 @@ where
     Ok(result)
 }
 
-pub fn get_keys(value: impl ToString) -> Vec<String> {
-    return value
-        .to_string()
-        .split(':')
-        .map(|part| part.to_owned())
-        .collect();
+pub fn get_keys(value: &str) -> Vec<&str> {
+    return value.split(':').collect();
 }
