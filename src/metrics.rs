@@ -181,9 +181,9 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
                             .unwrap_or_default(),
                     );
 
-                *statuses
-                    .get_mut(format!("{}", info.stage()).as_str())
-                    .unwrap() += 1;
+                if let Some(count) = statuses.get_mut(&info.stage().to_string()) {
+                    *count += 1;
+                }
             }
         }
 

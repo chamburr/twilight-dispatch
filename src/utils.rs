@@ -119,8 +119,8 @@ pub async fn get_clusters(
     let base = shards / CONFIG.clusters;
     let extra = shards % CONFIG.clusters;
 
-    let mut clusters = vec![];
-    let mut events = vec![];
+    let mut clusters = Vec::with_capacity(CONFIG.clusters as usize);
+    let mut events = Vec::with_capacity(CONFIG.clusters as usize);
     let mut last_index = CONFIG.shards_start;
 
     for i in 0..CONFIG.clusters {

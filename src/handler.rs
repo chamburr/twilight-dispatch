@@ -24,8 +24,8 @@ use twilight_gateway::{Cluster, Event};
 
 pub async fn outgoing(
     conn: &mut redis::aio::Connection,
-    cluster: &mut Cluster,
-    channel: &mut lapin::Channel,
+    cluster: &Cluster,
+    channel: &lapin::Channel,
     mut events: impl Stream<Item = (u64, Event)> + Send + Sync + Unpin + 'static,
 ) {
     let shard_strings: Vec<String> = (0..CONFIG.shards_total).map(|x| x.to_string()).collect();
@@ -76,7 +76,7 @@ pub async fn outgoing(
                 SHARD_EVENTS.with_label_values(&["Ready"]).inc();
             }
             Event::Resumed => {
-                if let Ok(info) = cluster.shard(shard as u64).unwrap().info() {
+                if let Some(Ok(info)) = cluster.shard(shard as u64).map(|s| s.info()) {
                     info!(
                         "[Shard {}] Resumed (session: {})",
                         shard,
@@ -201,12 +201,9 @@ pub async fn outgoing(
                             "{} ({})",
                             guild
                                 .get("name")
-                                .map(|name| name.as_str().unwrap())
+                                .and_then(|name| name.as_str())
                                 .unwrap_or("Unknown"),
-                            guild
-                                .get("id")
-                                .map(|id| id.as_str().unwrap())
-                                .unwrap_or("0")
+                            guild.get("id").and_then(|id| id.as_str()).unwrap_or("0")
                         ),
                     );
                 }
@@ -216,7 +213,7 @@ pub async fn outgoing(
     }
 }
 
-pub async fn incoming(clusters: &mut [Cluster], channel: &mut Channel) {
+pub async fn incoming(clusters: &[Cluster], channel: &Channel) {
     let mut consumer = match channel
         .basic_consume(
             QUEUE_SEND,
