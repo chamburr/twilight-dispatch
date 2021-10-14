@@ -117,12 +117,13 @@ async fn real_main() -> ApiResult<()> {
 
     let shards = get_shards();
     let resumes = get_resume_sessions(&mut conn).await?;
+    let resumes_len = resumes.len();
     let queue = get_queue();
-    let (clusters, events) = get_clusters(resumes.clone(), queue).await?;
+    let (clusters, events) = get_clusters(resumes, queue).await?;
 
     info!("Starting up {} clusters", clusters.len());
     info!("Starting up {} shards", shards);
-    info!("Resuming {} sessions", resumes.len());
+    info!("Resuming {} sessions", resumes_len);
 
     cache::set(&mut conn, STARTED_KEY, &FormattedDateTime::now()).await?;
     cache::set(&mut conn, SHARDS_KEY, &CONFIG.shards_total).await?;
@@ -150,23 +151,17 @@ async fn real_main() -> ApiResult<()> {
         });
 
         let mut conn_clone = redis.get_async_connection().await?;
-        let mut cluster_clone = cluster.clone();
-        let mut channel_clone = channel.clone();
+        let cluster_clone = cluster.clone();
+        let channel_clone = channel.clone();
         tokio::spawn(async move {
-            handler::outgoing(
-                &mut conn_clone,
-                &mut cluster_clone,
-                &mut channel_clone,
-                events,
-            )
-            .await;
+            handler::outgoing(&mut conn_clone, &cluster_clone, &channel_clone, events).await;
         });
     }
 
-    let mut channel_clone = channel_send.clone();
-    let mut clusters_clone = clusters.clone();
+    let channel_clone = channel_send.clone();
+    let clusters_clone = clusters.clone();
     tokio::spawn(async move {
-        handler::incoming(clusters_clone.as_mut_slice(), &mut channel_clone).await;
+        handler::incoming(clusters_clone.as_slice(), &channel_clone).await;
     });
 
     ctrl_c().await?;
