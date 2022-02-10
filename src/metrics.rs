@@ -23,6 +23,7 @@ use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
     str::FromStr,
+    sync::Arc,
 };
 use tokio::time::{sleep, Duration};
 use tracing::warn;
@@ -153,14 +154,13 @@ async fn get_state_stats(conn: &mut redis::aio::Connection) -> ApiResult<StateSt
     })
 }
 
-pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
+pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Arc<Cluster>]) {
     loop {
-        let mut shards = vec![];
-        for cluster in clusters {
-            shards.append(&mut cluster.shards())
-        }
-
-        GATEWAY_SHARDS.set(shards.len() as i64);
+        GATEWAY_SHARDS.set(
+            clusters
+                .iter()
+                .fold(0, |acc, cluster| acc + cluster.shards().len() as i64),
+        );
 
         let mut statuses = HashMap::new();
         statuses.insert(format!("{}", Stage::Connected), 0);
@@ -169,20 +169,22 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
         statuses.insert(format!("{}", Stage::Identifying), 0);
         statuses.insert(format!("{}", Stage::Resuming), 0);
 
-        for shard in shards {
-            if let Ok(info) = shard.info() {
-                GATEWAY_LATENCIES
-                    .with_label_values(&[info.id().to_string().as_str()])
-                    .set(
-                        info.latency()
-                            .recent()
-                            .back()
-                            .map(|value| value.as_millis() as i64)
-                            .unwrap_or_default(),
-                    );
+        for cluster in clusters {
+            for shard in cluster.shards() {
+                if let Ok(info) = shard.info() {
+                    GATEWAY_LATENCIES
+                        .with_label_values(&[info.id().to_string().as_str()])
+                        .set(
+                            info.latency()
+                                .recent()
+                                .back()
+                                .map(|value| value.as_millis() as i64)
+                                .unwrap_or_default(),
+                        );
 
-                if let Some(count) = statuses.get_mut(&info.stage().to_string()) {
-                    *count += 1;
+                    if let Some(count) = statuses.get_mut(&info.stage().to_string()) {
+                        *count += 1;
+                    }
                 }
             }
         }

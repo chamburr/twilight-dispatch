@@ -17,10 +17,10 @@ use lapin::{
     BasicProperties, Channel,
 };
 use simd_json::{json, ValueAccess};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio::time::timeout;
 use tracing::{info, warn};
-use twilight_gateway::{Cluster, Event};
+use twilight_gateway::{shard::raw_message::Message, Cluster, Event};
 
 pub async fn outgoing(
     conn: &mut redis::aio::Connection,
@@ -72,7 +72,7 @@ pub async fn outgoing(
             }
             Event::Ready(data) => {
                 info!("[Shard {}] Ready (session: {})", shard, data.session_id);
-                log_discord(cluster, READY_COLOR, format!("[Shard {}] Ready", shard));
+                log_discord(READY_COLOR, format!("[Shard {}] Ready", shard));
                 SHARD_EVENTS.with_label_values(&["Ready"]).inc();
             }
             Event::Resumed => {
@@ -85,16 +85,12 @@ pub async fn outgoing(
                 } else {
                     info!("[Shard {}] Resumed", shard);
                 }
-                log_discord(cluster, RESUME_COLOR, format!("[Shard {}] Resumed", shard));
+                log_discord(RESUME_COLOR, format!("[Shard {}] Resumed", shard));
                 SHARD_EVENTS.with_label_values(&["Resumed"]).inc();
             }
             Event::ShardConnected(_) => {
                 info!("[Shard {}] Connected", shard);
-                log_discord(
-                    cluster,
-                    CONNECT_COLOR,
-                    format!("[Shard {}] Connected", shard),
-                );
+                log_discord(CONNECT_COLOR, format!("[Shard {}] Connected", shard));
                 SHARD_EVENTS.with_label_values(&["Connected"]).inc();
             }
             Event::ShardConnecting(data) => {
@@ -115,11 +111,7 @@ pub async fn outgoing(
                 } else {
                     info!("[Shard {}] Disconnected", shard);
                 }
-                log_discord(
-                    cluster,
-                    DISCONNECT_COLOR,
-                    format!("[Shard {}] Disconnected", shard),
-                );
+                log_discord(DISCONNECT_COLOR, format!("[Shard {}] Disconnected", shard));
                 SHARD_EVENTS.with_label_values(&["Disconnected"]).inc();
             }
             Event::ShardIdentifying(_) => {
@@ -151,7 +143,7 @@ pub async fn outgoing(
                                             EXCHANGE,
                                             kind,
                                             BasicPublishOptions::default(),
-                                            payload,
+                                            &payload,
                                             BasicProperties::default(),
                                         )
                                         .await;
@@ -181,7 +173,6 @@ pub async fn outgoing(
                 if old.is_none() {
                     GUILD_EVENTS.with_label_values(&["Join"]).inc();
                     log_discord_guild(
-                        cluster,
                         JOIN_COLOR,
                         "Guild Join",
                         format!("{} ({})", data.name, data.id),
@@ -194,7 +185,6 @@ pub async fn outgoing(
                     let old_data = old.unwrap_or(json!({}));
                     let guild = old_data.as_object().unwrap();
                     log_discord_guild(
-                        cluster,
                         LEAVE_COLOR,
                         "Guild Leave",
                         format!(
@@ -213,7 +203,7 @@ pub async fn outgoing(
     }
 }
 
-pub async fn incoming(clusters: &[Cluster], channel: &Channel) {
+pub async fn incoming(clusters: &[Arc<Cluster>], channel: &Channel) {
     let mut consumer = match channel
         .basic_consume(
             QUEUE_SEND,
@@ -232,7 +222,7 @@ pub async fn incoming(clusters: &[Cluster], channel: &Channel) {
 
     while let Some(message) = consumer.next().await {
         match message {
-            Ok((channel, mut delivery)) => {
+            Ok(mut delivery) => {
                 let _ = channel
                     .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
                     .await;
@@ -245,7 +235,15 @@ pub async fn incoming(clusters: &[Cluster], channel: &Channel) {
                             match payload.op {
                                 DeliveryOpcode::Send => {
                                     if let Err(err) = cluster
-                                        .command(payload.shard, &payload.data.unwrap_or_default())
+                                        .send(
+                                            payload.shard,
+                                            Message::Binary(
+                                                simd_json::to_vec(
+                                                    &payload.data.unwrap_or_default(),
+                                                )
+                                                .unwrap_or_default(),
+                                            ),
+                                        )
                                         .await
                                     {
                                         warn!("Failed to send gateway command: {:?}", err);

@@ -6,10 +6,11 @@ use crate::{
 };
 
 use futures_util::Stream;
+use lazy_static::lazy_static;
 use serde::Serialize;
 use simd_json::owned::Value;
 use std::{collections::HashMap, fmt::Debug, future::Future, pin::Pin, sync::Arc, time::Duration};
-use time::{Format, OffsetDateTime};
+use time::OffsetDateTime;
 use tokio::{
     sync::{
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
@@ -22,14 +23,20 @@ use twilight_gateway::{
     cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, Event, EventTypeFlags,
     Intents,
 };
+use twilight_http::client::Client;
 use twilight_model::{
     channel::embed::Embed,
+    datetime::Timestamp,
     gateway::{
-        payload::update_presence::UpdatePresencePayload,
+        payload::outgoing::update_presence::UpdatePresencePayload,
         presence::{Activity, UserOrId},
     },
-    id::{ChannelId, UserId},
+    id::{marker::UserMarker, Id},
 };
+
+lazy_static! {
+    static ref CLIENT: Client = Client::new(CONFIG.bot_token.clone());
+}
 
 #[derive(Clone, Debug)]
 pub struct LocalQueue(UnboundedSender<Sender<()>>);
@@ -101,7 +108,7 @@ async fn waiter(mut rx: UnboundedReceiver<Sender<()>>, duration: Duration) {
 }
 
 #[inline]
-pub fn get_user_id(user: &UserOrId) -> UserId {
+pub fn get_user_id(user: &UserOrId) -> Id<UserMarker> {
     match user {
         UserOrId::User(u) => u.id,
         UserOrId::UserId { id } => *id,
@@ -110,9 +117,9 @@ pub fn get_user_id(user: &UserOrId) -> UserId {
 
 pub async fn get_clusters(
     resumes: HashMap<u64, ResumeSession>,
-    queue: Arc<Box<dyn Queue>>,
+    queue: Arc<dyn Queue>,
 ) -> ApiResult<(
-    Vec<Cluster>,
+    Vec<Arc<Cluster>>,
     Vec<impl Stream<Item = (u64, Event)> + Send + Sync + Unpin + 'static>,
 )> {
     let shards = get_shards();
@@ -173,7 +180,7 @@ pub async fn get_clusters(
         .build()
         .await?;
 
-        clusters.push(cluster);
+        clusters.push(Arc::new(cluster));
         events.push(event);
 
         last_index = index + 1;
@@ -182,13 +189,13 @@ pub async fn get_clusters(
     Ok((clusters, events))
 }
 
-pub fn get_queue() -> Arc<Box<dyn Queue>> {
+pub fn get_queue() -> Arc<dyn Queue> {
     let concurrency = CONFIG.shards_concurrency as usize;
     let wait = Duration::from_secs(CONFIG.shards_wait);
     if concurrency == 1 {
-        Arc::new(Box::new(LocalQueue::new(wait)))
+        Arc::new(LocalQueue::new(wait))
     } else {
-        Arc::new(Box::new(LargeBotQueue::new(concurrency, wait)))
+        Arc::new(LargeBotQueue::new(concurrency, wait))
     }
 }
 
@@ -269,68 +276,69 @@ pub fn get_event_flags() -> EventTypeFlags {
     event_flags
 }
 
-pub fn log_discord(cluster: &Cluster, color: usize, message: impl Into<String>) {
-    let client = cluster.config().http_client().clone();
+pub fn log_discord(color: usize, message: impl Into<String>) {
     let message = message.into();
 
     tokio::spawn(async move {
-        let message = client
-            .create_message(ChannelId(CONFIG.log_channel))
-            .embed(Embed {
-                author: None,
-                color: Some(color as u32),
-                description: None,
-                fields: vec![],
-                footer: None,
-                image: None,
-                kind: "".to_owned(),
-                provider: None,
-                thumbnail: None,
-                timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
-                title: Some(message),
-                url: None,
-                video: None,
-            });
+        let embeds = &[Embed {
+            author: None,
+            color: Some(color as u32),
+            description: None,
+            fields: vec![],
+            footer: None,
+            image: None,
+            kind: "".to_owned(),
+            provider: None,
+            thumbnail: None,
+            timestamp: Some(
+                Timestamp::from_secs(OffsetDateTime::now_utc().unix_timestamp()).unwrap(),
+            ),
+            title: Some(message),
+            url: None,
+            video: None,
+        }];
+
+        let message = CLIENT
+            .create_message(Id::new(CONFIG.log_channel))
+            .embeds(embeds);
 
         if let Ok(message) = message {
-            if let Err(err) = message.await {
+            if let Err(err) = message.exec().await {
                 warn!("Failed to post message to Discord: {:?}", err)
             }
         }
     });
 }
 
-pub fn log_discord_guild(
-    cluster: &Cluster,
-    color: usize,
-    title: impl Into<String>,
-    message: impl Into<String>,
-) {
-    let client = cluster.config().http_client().clone();
+pub fn log_discord_guild(color: usize, title: impl Into<String>, message: impl Into<String>) {
     let title = title.into();
     let message = message.into();
 
     tokio::spawn(async move {
-        let message = client
-            .create_message(ChannelId(CONFIG.log_guild_channel))
-            .embed(Embed {
-                author: None,
-                color: Some(color as u32),
-                description: Some(message),
-                fields: vec![],
-                footer: None,
-                image: None,
-                kind: "".to_owned(),
-                provider: None,
-                thumbnail: None,
-                timestamp: Some(OffsetDateTime::now_utc().format(Format::Rfc3339)),
-                title: Some(title),
-                url: None,
-                video: None,
-            });
+        let embeds = &[Embed {
+            author: None,
+            color: Some(color as u32),
+            description: Some(message),
+            fields: vec![],
+            footer: None,
+            image: None,
+            kind: "".to_owned(),
+            provider: None,
+            thumbnail: None,
+            timestamp: Some(
+                Timestamp::from_secs(OffsetDateTime::now_utc().unix_timestamp()).unwrap(),
+            ),
+            title: Some(title),
+            url: None,
+            video: None,
+        }];
+
+        let message = CLIENT
+            .create_message(Id::new(CONFIG.log_guild_channel))
+            .embeds(embeds);
 
         if let Ok(message) = message {
-            if let Err(err) = message.await {
+            if let Err(err) = message.exec().await {
                 warn!("Failed to post message to Discord: {:?}", err)
             }
         }

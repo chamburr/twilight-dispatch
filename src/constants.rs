@@ -1,4 +1,7 @@
-use twilight_model::id::{ChannelId, EmojiId, GuildId, MessageId, RoleId, UserId};
+use twilight_model::id::{
+    marker::{ChannelMarker, EmojiMarker, GuildMarker, MessageMarker, RoleMarker, UserMarker},
+    Id,
+};
 
 pub const EXCHANGE: &str = "gateway";
 pub const QUEUE_RECV: &str = "gateway.recv";
@@ -33,38 +36,38 @@ pub const RESUME_COLOR: usize = 0x1E90FF;
 pub const JOIN_COLOR: usize = 0x00FF00;
 pub const LEAVE_COLOR: usize = 0xFF0000;
 
-pub fn guild_key(guild: GuildId) -> String {
+pub fn guild_key(guild: Id<GuildMarker>) -> String {
     format!("{}:{}", GUILD_KEY, guild)
 }
 
-pub fn channel_key(guild: GuildId, channel: ChannelId) -> String {
+pub fn channel_key(guild: Id<GuildMarker>, channel: Id<ChannelMarker>) -> String {
     format!("{}:{}:{}", CHANNEL_KEY, guild, channel)
 }
 
-pub fn private_channel_key(channel: ChannelId) -> String {
+pub fn private_channel_key(channel: Id<ChannelMarker>) -> String {
     format!("{}:{}", CHANNEL_KEY, channel)
 }
 
-pub fn message_key(channel: ChannelId, message: MessageId) -> String {
+pub fn message_key(channel: Id<ChannelMarker>, message: Id<MessageMarker>) -> String {
     format!("{}:{}:{}", MESSAGE_KEY, channel, message)
 }
 
-pub fn role_key(guild: GuildId, role: RoleId) -> String {
+pub fn role_key(guild: Id<GuildMarker>, role: Id<RoleMarker>) -> String {
     format!("{}:{}:{}", ROLE_KEY, guild, role)
 }
 
-pub fn emoji_key(guild: GuildId, emoji: EmojiId) -> String {
+pub fn emoji_key(guild: Id<GuildMarker>, emoji: Id<EmojiMarker>) -> String {
     format!("{}:{}:{}", EMOJI_KEY, guild, emoji)
 }
 
-pub fn member_key(guild: GuildId, member: UserId) -> String {
+pub fn member_key(guild: Id<GuildMarker>, member: Id<UserMarker>) -> String {
     format!("{}:{}:{}", MEMBER_KEY, guild, member)
 }
 
-pub fn presence_key(guild: GuildId, member: UserId) -> String {
+pub fn presence_key(guild: Id<GuildMarker>, member: Id<UserMarker>) -> String {
     format!("{}:{}:{}", PRESENCE_KEY, guild, member)
 }
 
-pub fn voice_key(guild: GuildId, member: UserId) -> String {
+pub fn voice_key(guild: Id<GuildMarker>, member: Id<UserMarker>) -> String {
     format!("{}:{}:{}", VOICE_KEY, guild, member)
 }

@@ -2,25 +2,26 @@
 name = "twilight-dispatch"
 version = "0.3.4"
 authors = ["CHamburr <hi@chamburr.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 dotenv = { version = "0.15", default-features = false }
 futures-util = { version = "0.3", default-features = false }
 hyper = { version = "0.14", default-features = false, features = ["server", "tcp", "http1"] }
-lapin = { version = "1.6", default-features = false }
+lapin = { version = "2.0", default-features = false }
 lazy_static = { version = "1.4", default-features = false }
-prometheus = { version = "0.12", default-features = false, features = ["process"] }
-redis = { version = "0.20", default-features = false, features = ["tokio-comp"] }
+prometheus = { version = "0.13", default-features = false, features = ["process"] }
+redis = { version = "0.21", default-features = false, features = ["tokio-comp"] }
 serde = { version = "1.0", default-features = false }
 serde_repr = { version = "0.1", default-features = false }
 simd-json = { version = "0.4", default-features = false, features = ["serde_impl"] }
-time = { version = "0.2", default-features = false, features = ["std"] }
+time = { version = "0.3", default-features = false, features = ["std", "formatting"] }
 tokio = { version = "1.2", default-features = false, features = ["rt-multi-thread", "macros", "signal", "time"] }
 tracing = { version = "0.1", default-features = false }
-tracing-subscriber = { version = "0.2", default-features = false, features = ["ansi", "fmt"] }
-twilight-gateway = { version = "0.5", default-features = false, features = ["rustls-webpki-roots", "simd-json", "zlib-simd"] }
-twilight-model = { version = "0.5", default-features = false }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "fmt"] }
+twilight-gateway = { version = "0.9", default-features = false, features = ["rustls-webpki-roots", "simd-json", "zlib-simd"] }
+twilight-http = { version = "0.9", default-features = false }
+twilight-model = { version = "0.9", default-features = false }
 
 [patch.crates-io]
 hyper-rustls = { git = "https://github.com/ctz/hyper-rustls" }

@@ -13,7 +13,7 @@ use crate::{
 use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
 use serde::{de::DeserializeOwned, Serialize};
 use simd_json::owned::Value;
-use std::{collections::HashMap, hash::Hash, iter};
+use std::{collections::HashMap, hash::Hash, iter, sync::Arc};
 use tokio::time::{sleep, Duration};
 use tracing::warn;
 use twilight_gateway::Cluster;
@@ -21,7 +21,10 @@ use twilight_model::{
     channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel},
     gateway::event::Event,
     guild::{Emoji, Member},
-    id::{GuildId, UserId},
+    id::{
+        marker::{GuildMarker, UserMarker},
+        Id,
+    },
 };
 
 pub async fn get<K, T>(conn: &mut redis::aio::Connection, key: K) -> ApiResult<Option<T>>
@@ -274,7 +277,7 @@ where
     Ok(())
 }
 
-pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Cluster]) {
+pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Arc<Cluster>]) {
     loop {
         let mut statuses = vec![];
         let mut sessions = HashMap::new();
@@ -368,7 +371,7 @@ pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
 
 async fn clear_guild<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
-    guild_id: GuildId,
+    guild_id: Id<GuildMarker>,
 ) -> ApiResult<Option<T>> {
     let members: Vec<String> =
         get_members(conn, format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, guild_id)).await?;
@@ -384,7 +387,7 @@ async fn clear_guild<T: DeserializeOwned>(
 pub async fn update(
     conn: &mut redis::aio::Connection,
     event: &Event,
-    bot_id: UserId,
+    bot_id: Id<UserMarker>,
 ) -> ApiResult<Option<Value>> {
     let mut old: Option<Value> = None;
 
@@ -459,6 +462,15 @@ pub async fn update(
                         channel.guild_id = Some(data.id);
                     }
                     GuildChannel::Stage(channel) => {
+                        channel.guild_id = Some(data.id);
+                    }
+                    GuildChannel::NewsThread(channel) => {
+                        channel.guild_id = Some(data.id);
+                    }
+                    GuildChannel::PrivateThread(channel) => {
+                        channel.guild_id = Some(data.id);
+                    }
+                    GuildChannel::PublicThread(channel) => {
                         channel.guild_id = Some(data.id);
                     }
                 }

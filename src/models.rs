@@ -14,11 +14,11 @@ use std::{
     num::ParseIntError,
     ops::{Add, Sub},
 };
-use time::{Duration, OffsetDateTime};
+use time::{format_description, Duration, OffsetDateTime};
 use twilight_gateway::{cluster::ClusterStartError, shard::LargeThresholdError};
 use twilight_model::{
     channel::GuildChannel,
-    gateway::{payload::GuildCreate, presence::Presence, OpCode},
+    gateway::{payload::incoming::GuildCreate, presence::Presence, OpCode},
     guild::{Emoji, Member, Role},
     voice::VoiceState,
 };
@@ -61,7 +61,10 @@ impl Serialize for FormattedDateTime {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&self.0.format("%FT%T.%N"))
+        let format =
+            format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond]")
+                .unwrap();
+        serializer.serialize_str(&self.0.format(&format).unwrap())
     }
 }
 
@@ -70,8 +73,12 @@ impl<'de> Deserialize<'de> for FormattedDateTime {
     where
         D: Deserializer<'de>,
     {
-        let string = String::deserialize(deserializer)?;
-        match OffsetDateTime::parse(string + "+0000", "%FT%T.%N%z") {
+        let string = String::deserialize(deserializer)? + "+0000";
+        let format = format_description::parse(
+            "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond]+[offset_hour]",
+        )
+        .unwrap();
+        match OffsetDateTime::parse(string.as_str(), &format) {
             Ok(dt) => Ok(Self(dt)),
             Err(_) => Err(SerdeDeError::custom("not a valid formatted timestamp")),
         }
@@ -81,8 +88,12 @@ impl<'de> Deserialize<'de> for FormattedDateTime {
     where
         D: Deserializer<'de>,
     {
-        let string = String::deserialize(deserializer)?;
-        match OffsetDateTime::parse(string + "+0000", "%FT%T.%N%z") {
+        let string = String::deserialize(deserializer)? + "+0000";
+        let format = format_description::parse(
+            "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond]+[offset_hour]",
+        )
+        .unwrap();
+        match OffsetDateTime::parse(string.as_str(), &format) {
             Ok(dt) => {
                 place.0 = dt;
                 Ok(())
