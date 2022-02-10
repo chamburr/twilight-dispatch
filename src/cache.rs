@@ -378,7 +378,12 @@ async fn clear_guild<T: DeserializeOwned>(
 
     del_all(conn, members).await?;
 
-    let guild = get(conn, guild_key(guild_id)).await?;
+    let guild = if CONFIG.state_old {
+        get(conn, guild_key(guild_id)).await?
+    } else {
+        None
+    };
+
     del(conn, guild_key(guild_id)).await?;
 
     Ok(guild)
@@ -404,12 +409,16 @@ pub async fn update(
         Event::ChannelDelete(data) => match &data.0 {
             Channel::Private(c) => {
                 let key = private_channel_key(c.id);
-                old = get(conn, &key).await?;
+                if CONFIG.state_old {
+                    old = get(conn, &key).await?;
+                }
                 del(conn, &key).await?;
             }
             Channel::Guild(c) => {
                 let key = channel_key(c.guild_id().unwrap(), c.id());
-                old = get(conn, &key).await?;
+                if CONFIG.state_old {
+                    old = get(conn, &key).await?;
+                }
                 del(conn, &key).await?;
             }
             _ => {}
@@ -435,12 +444,16 @@ pub async fn update(
         Event::ChannelUpdate(data) => match &data.0 {
             Channel::Private(c) => {
                 let key = private_channel_key(c.id);
-                old = get(conn, &key).await?;
+                if CONFIG.state_old {
+                    old = get(conn, &key).await?;
+                }
                 set(conn, &key, c).await?;
             }
             Channel::Guild(c) => {
                 let key = channel_key(c.guild_id().unwrap(), c.id());
-                old = get(conn, &key).await?;
+                if CONFIG.state_old {
+                    old = get(conn, &key).await?;
+                }
                 set(conn, &key, c).await?;
             }
             _ => {}
@@ -548,11 +561,15 @@ pub async fn update(
                     .map(|emoji| (emoji_key(data.guild_id, emoji.id), emoji)),
             )
             .await?;
-            old = Some(to_value(&emojis)?);
+            if CONFIG.state_old {
+                old = Some(to_value(&emojis)?);
+            }
         }
         Event::GuildUpdate(data) => {
             let key = guild_key(data.id);
-            old = get(conn, &key).await?;
+            if CONFIG.state_old {
+                old = get(conn, &key).await?;
+            }
             set(conn, &key, &data).await?;
         }
         Event::MemberAdd(data) => {
@@ -565,7 +582,9 @@ pub async fn update(
         Event::MemberRemove(data) => {
             if CONFIG.state_member {
                 let key = member_key(data.guild_id, data.user.id);
-                old = get(conn, &key).await?;
+                if CONFIG.state_old {
+                    old = get(conn, &key).await?;
+                }
                 del(conn, &key).await?;
             }
             if CONFIG.state_presence {
@@ -577,8 +596,10 @@ pub async fn update(
                 let key = member_key(data.guild_id, data.user.id);
                 let member: Option<Member> = get(conn, &key).await?;
                 if let Some(mut member) = member {
-                    old = Some(to_value(&member)?);
-                    member.joined_at = Some(data.joined_at.clone());
+                    if CONFIG.state_old {
+                        old = Some(to_value(&member)?);
+                    }
+                    member.joined_at = data.joined_at.clone();
                     member.nick = data.nick.clone();
                     member.premium_since = data.premium_since.clone();
                     member.roles = data.roles.clone();
@@ -619,7 +640,9 @@ pub async fn update(
         Event::MessageDelete(data) => {
             if CONFIG.state_message {
                 let key = message_key(data.channel_id, data.id);
-                old = get(conn, &key).await?;
+                if CONFIG.state_old {
+                    old = get(conn, &key).await?;
+                }
                 del(conn, &key).await?;
             }
         }
@@ -636,7 +659,9 @@ pub async fn update(
                     .flatten()
                     .collect();
                 del_all(conn, message_keys).await?;
-                old = Some(to_value(&messages)?);
+                if CONFIG.state_old {
+                    old = Some(to_value(&messages)?);
+                }
             }
         }
         Event::MessageUpdate(data) => {
@@ -644,7 +669,9 @@ pub async fn update(
                 let key = message_key(data.channel_id, data.id);
                 let message: Option<Message> = get(conn, &key).await?;
                 if let Some(mut message) = message {
-                    old = Some(to_value(&message)?);
+                    if CONFIG.state_old {
+                        old = Some(to_value(&message)?);
+                    }
                     if let Some(attachments) = &data.attachments {
                         message.attachments = attachments.clone();
                     }
@@ -683,7 +710,9 @@ pub async fn update(
         Event::PresenceUpdate(data) => {
             if CONFIG.state_presence {
                 let key = presence_key(data.guild_id, get_user_id(&data.user));
-                old = get(conn, &key).await?;
+                if CONFIG.state_old {
+                    old = get(conn, &key).await?;
+                }
                 set(conn, &key, &data).await?;
             }
         }
@@ -700,12 +729,16 @@ pub async fn update(
         }
         Event::RoleDelete(data) => {
             let key = role_key(data.guild_id, data.role_id);
-            old = get(conn, &key).await?;
+            if CONFIG.state_old {
+                old = get(conn, &key).await?;
+            }
             del(conn, &key).await?;
         }
         Event::RoleUpdate(data) => {
             let key = role_key(data.guild_id, data.role.id);
-            old = get(conn, &key).await?;
+            if CONFIG.state_old {
+                old = get(conn, &key).await?;
+            }
             set(conn, &key, &data.role).await?;
         }
         Event::UnavailableGuild(data) => {
@@ -713,13 +746,17 @@ pub async fn update(
             set(conn, guild_key(data.id), data).await?;
         }
         Event::UserUpdate(data) => {
-            old = get(conn, BOT_USER_KEY).await?;
+            if CONFIG.state_old {
+                old = get(conn, BOT_USER_KEY).await?;
+            }
             set(conn, BOT_USER_KEY, &data).await?;
         }
         Event::VoiceStateUpdate(data) => {
             if let Some(guild_id) = data.0.guild_id {
                 let key = voice_key(guild_id, data.0.user_id);
-                old = get(conn, &key).await?;
+                if CONFIG.state_old {
+                    old = get(conn, &key).await?;
+                }
                 match data.0.channel_id {
                     Some(_) => set(conn, &key, &data.0).await?,
                     None => del(conn, &key).await?,

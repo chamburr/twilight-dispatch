@@ -64,9 +64,9 @@ The objects available are in the table below. All values are stored in the plain
 will need to properly deserialize them before using. Some objects such as presence and member could
 be missing if you disable them in the configurations.
 
-Furthermore, when state caching is enabled, there will be an additional field for gateway events in
-the message queue, `old`, containing the previous state (only if it exists). This could be useful
-for the `MESSAGE_DELETE` event and such.
+Furthermore, when the old state option is enabled, there will be an additional field for gateway
+events in the message queue, `old`, containing the previous state (only if it exists). This could
+be useful for the `MESSAGE_DELETE` event and such.
 
 | Key                             | Description                      |
 | ------------------------------- | -------------------------------- |
