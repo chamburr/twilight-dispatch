@@ -378,11 +378,7 @@ async fn clear_guild<T: DeserializeOwned>(
 
     del_all(conn, members).await?;
 
-    let guild = if CONFIG.state_old {
-        get(conn, guild_key(guild_id)).await?
-    } else {
-        None
-    };
+    let guild = get(conn, guild_key(guild_id)).await?;
 
     del(conn, guild_key(guild_id)).await?;
 
