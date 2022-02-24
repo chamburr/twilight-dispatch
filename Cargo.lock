@@ -1478,7 +1478,19 @@ checksum = "2d8d93354fe2a8e50d5953f5ae2e47a3fc2ef03292e7ea46e3cc38f549525fb9"
 dependencies = [
  "cfg-if",
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8276d9a4a3a558d7b7ad5303ad50b53d58264641b82914b7ada36bd762e7a716"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1569,6 +1581,7 @@ dependencies = [
  "simd-json",
  "tokio",
  "tokio-tungstenite",
+ "tracing",
  "twilight-gateway-queue",
  "twilight-http",
  "twilight-model",
@@ -1598,7 +1611,9 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "simd-json",
  "tokio",
+ "tracing",
  "twilight-http-ratelimiting",
  "twilight-model",
  "twilight-validate",
@@ -1626,6 +1641,7 @@ dependencies = [
  "serde-value",
  "serde_repr",
  "time",
+ "tracing",
 ]
 
 [[package]]
