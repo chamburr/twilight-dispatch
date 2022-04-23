@@ -17,7 +17,7 @@ use std::{
 use time::{format_description, Duration, OffsetDateTime};
 use twilight_gateway::{cluster::ClusterStartError, shard::LargeThresholdError};
 use twilight_model::{
-    channel::GuildChannel,
+    channel::Channel,
     gateway::{payload::incoming::GuildCreate, presence::Presence, OpCode},
     guild::{Emoji, Member, Role},
     voice::VoiceState,
@@ -140,11 +140,12 @@ pub struct DeliveryInfo {
     pub data: Option<Value>,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum GuildItem {
     Guild(Box<GuildCreate>),
-    Channel(GuildChannel),
+    Channel(Channel),
     Role(Role),
     Emoji(Emoji),
     Voice(VoiceState),

@@ -7,7 +7,7 @@ use crate::{
         MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
     },
     models::{ApiError, ApiResult, FormattedDateTime, GuildItem, SessionInfo, StatusInfo},
-    utils::{get_keys, get_user_id, to_value},
+    utils::{get_channel_key, get_keys, get_user_id, to_value},
 };
 
 use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
@@ -18,7 +18,7 @@ use tokio::time::{sleep, Duration};
 use tracing::warn;
 use twilight_gateway::Cluster;
 use twilight_model::{
-    channel::{Channel, GuildChannel, Message, PrivateChannel, TextChannel},
+    channel::{Channel, Message},
     gateway::event::Event,
     guild::{Emoji, Member},
     id::{
@@ -393,98 +393,44 @@ pub async fn update(
     let mut old: Option<Value> = None;
 
     match event {
-        Event::ChannelCreate(data) => match &data.0 {
-            Channel::Private(c) => {
-                set(conn, private_channel_key(c.id), c).await?;
+        Event::ChannelCreate(data) => {
+            set(conn, get_channel_key(data), &data).await?;
+        }
+        Event::ChannelDelete(data) => {
+            let key = get_channel_key(data);
+            if CONFIG.state_old {
+                old = get(conn, &key).await?;
             }
-            Channel::Guild(c) => {
-                set(conn, channel_key(c.guild_id().unwrap(), c.id()), c).await?;
+            del(conn, &key).await?;
+        }
+        Event::ChannelPinsUpdate(data) => {
+            let key = if let Some(guild_id) = data.guild_id {
+                channel_key(guild_id, data.channel_id)
+            } else {
+                private_channel_key(data.channel_id)
+            };
+            let channel: Option<Channel> = get(conn, &key).await?;
+            if let Some(mut channel) = channel {
+                channel.last_pin_timestamp = data.last_pin_timestamp;
+                set(conn, &key, &channel).await?;
             }
-            _ => {}
-        },
-        Event::ChannelDelete(data) => match &data.0 {
-            Channel::Private(c) => {
-                let key = private_channel_key(c.id);
-                if CONFIG.state_old {
-                    old = get(conn, &key).await?;
-                }
-                del(conn, &key).await?;
+        }
+        Event::ChannelUpdate(data) => {
+            let key = get_channel_key(data);
+            if CONFIG.state_old {
+                old = get(conn, &key).await?;
             }
-            Channel::Guild(c) => {
-                let key = channel_key(c.guild_id().unwrap(), c.id());
-                if CONFIG.state_old {
-                    old = get(conn, &key).await?;
-                }
-                del(conn, &key).await?;
-            }
-            _ => {}
-        },
-        Event::ChannelPinsUpdate(data) => match data.guild_id {
-            Some(guild_id) => {
-                let key = channel_key(guild_id, data.channel_id);
-                let channel: Option<TextChannel> = get(conn, &key).await?;
-                if let Some(mut channel) = channel {
-                    channel.last_pin_timestamp = data.last_pin_timestamp.clone();
-                    set(conn, &key, &channel).await?;
-                }
-            }
-            None => {
-                let key = private_channel_key(data.channel_id);
-                let channel: Option<PrivateChannel> = get(conn, &key).await?;
-                if let Some(mut channel) = channel {
-                    channel.last_pin_timestamp = data.last_pin_timestamp.clone();
-                    set(conn, &key, &channel).await?;
-                }
-            }
-        },
-        Event::ChannelUpdate(data) => match &data.0 {
-            Channel::Private(c) => {
-                let key = private_channel_key(c.id);
-                if CONFIG.state_old {
-                    old = get(conn, &key).await?;
-                }
-                set(conn, &key, c).await?;
-            }
-            Channel::Guild(c) => {
-                let key = channel_key(c.guild_id().unwrap(), c.id());
-                if CONFIG.state_old {
-                    old = get(conn, &key).await?;
-                }
-                set(conn, &key, c).await?;
-            }
-            _ => {}
-        },
+            set(conn, &key, &data).await?;
+        }
         Event::GuildCreate(data) => {
             old = clear_guild(conn, data.id).await?;
 
             let mut items = vec![];
             let mut guild = data.clone();
             for mut channel in guild.channels.drain(..) {
-                match &mut channel {
-                    GuildChannel::Category(channel) => {
-                        channel.guild_id = Some(data.id);
-                    }
-                    GuildChannel::Text(channel) => {
-                        channel.guild_id = Some(data.id);
-                    }
-                    GuildChannel::Voice(channel) => {
-                        channel.guild_id = Some(data.id);
-                    }
-                    GuildChannel::Stage(channel) => {
-                        channel.guild_id = Some(data.id);
-                    }
-                    GuildChannel::NewsThread(channel) => {
-                        channel.guild_id = Some(data.id);
-                    }
-                    GuildChannel::PrivateThread(channel) => {
-                        channel.guild_id = Some(data.id);
-                    }
-                    GuildChannel::PublicThread(channel) => {
-                        channel.guild_id = Some(data.id);
-                    }
-                }
+                channel.guild_id = Some(data.id);
                 items.push((
-                    channel_key(data.id, channel.id()),
+                    channel_key(data.id, channel.id),
                     GuildItem::Channel(channel),
                 ));
             }
@@ -595,9 +541,9 @@ pub async fn update(
                     if CONFIG.state_old {
                         old = Some(to_value(&member)?);
                     }
-                    member.joined_at = data.joined_at.clone();
+                    member.joined_at = data.joined_at;
                     member.nick = data.nick.clone();
-                    member.premium_since = data.premium_since.clone();
+                    member.premium_since = data.premium_since;
                     member.roles = data.roles.clone();
                     member.user = data.user.clone();
                     set(conn, &key, &member).await?;
@@ -674,8 +620,8 @@ pub async fn update(
                     if let Some(content) = &data.content {
                         message.content = content.clone();
                     }
-                    if let Some(edited_timestamp) = &data.edited_timestamp {
-                        message.edited_timestamp = Some(edited_timestamp.clone());
+                    if let Some(edited_timestamp) = data.edited_timestamp {
+                        message.edited_timestamp = Some(edited_timestamp);
                     }
                     if let Some(embeds) = &data.embeds {
                         message.embeds = embeds.clone();
@@ -692,8 +638,8 @@ pub async fn update(
                     if let Some(pinned) = data.pinned {
                         message.pinned = pinned;
                     }
-                    if let Some(timestamp) = &data.timestamp {
-                        message.timestamp = timestamp.clone();
+                    if let Some(timestamp) = data.timestamp {
+                        message.timestamp = timestamp;
                     }
                     if let Some(tts) = data.tts {
                         message.tts = tts;

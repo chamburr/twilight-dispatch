@@ -19,9 +19,9 @@ time = { version = "0.3", default-features = false, features = ["std", "formatti
 tokio = { version = "1.2", default-features = false, features = ["rt-multi-thread", "macros", "signal", "time"] }
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "fmt"] }
-twilight-gateway = { version = "0.9", default-features = false, features = ["rustls-webpki-roots", "simd-json", "tracing", "zlib-simd"] }
-twilight-http = { version = "0.9", default-features = false, features = ["simd-json", "tracing"] }
-twilight-model = { version = "0.9", default-features = false, features = ["tracing"] }
+twilight-gateway = { version = "0.10", default-features = false, features = ["rustls-webpki-roots", "simd-json", "tracing", "zlib-simd"] }
+twilight-http = { version = "0.10", default-features = false, features = ["simd-json", "tracing"] }
+twilight-model = { version = "0.10", default-features = false, features = ["tracing"] }
 
 [patch.crates-io]
 hyper-rustls = { git = "https://github.com/ctz/hyper-rustls" }

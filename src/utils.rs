@@ -1,7 +1,7 @@
 use crate::{
     cache,
     config::CONFIG,
-    constants::{SESSIONS_KEY, SHARDS_KEY},
+    constants::{channel_key, private_channel_key, SESSIONS_KEY, SHARDS_KEY},
     models::{ApiResult, SessionInfo},
 };
 
@@ -25,7 +25,7 @@ use twilight_gateway::{
 };
 use twilight_http::client::Client;
 use twilight_model::{
-    channel::embed::Embed,
+    channel::{embed::Embed, Channel},
     datetime::Timestamp,
     gateway::{
         payload::outgoing::update_presence::UpdatePresencePayload,
@@ -112,6 +112,14 @@ pub fn get_user_id(user: &UserOrId) -> Id<UserMarker> {
     match user {
         UserOrId::User(u) => u.id,
         UserOrId::UserId { id } => *id,
+    }
+}
+
+pub fn get_channel_key(channel: &Channel) -> String {
+    if channel.kind.is_guild() {
+        channel_key(channel.guild_id.unwrap(), channel.id)
+    } else {
+        private_channel_key(channel.id)
     }
 }
 
