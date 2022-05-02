@@ -285,6 +285,10 @@ pub fn get_event_flags() -> EventTypeFlags {
 }
 
 pub fn log_discord(color: usize, message: impl Into<String>) {
+    if CONFIG.log_channel == 0 {
+        return;
+    }
+
     let message = message.into();
 
     tokio::spawn(async move {
@@ -319,6 +323,10 @@ pub fn log_discord(color: usize, message: impl Into<String>) {
 }
 
 pub fn log_discord_guild(color: usize, title: impl Into<String>, message: impl Into<String>) {
+    if CONFIG.log_guild_channel == 0 {
+        return;
+    }
+
     let title = title.into();
     let message = message.into();
 
