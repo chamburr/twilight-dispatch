@@ -73,7 +73,7 @@ impl<'de> Deserialize<'de> for FormattedDateTime {
     where
         D: Deserializer<'de>,
     {
-        let string = String::deserialize(deserializer)? + "+0000";
+        let string = String::deserialize(deserializer)? + "+00";
         let format = format_description::parse(
             "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond]+[offset_hour]",
         )
@@ -88,7 +88,7 @@ impl<'de> Deserialize<'de> for FormattedDateTime {
     where
         D: Deserializer<'de>,
     {
-        let string = String::deserialize(deserializer)? + "+0000";
+        let string = String::deserialize(deserializer)? + "+00";
         let format = format_description::parse(
             "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond]+[offset_hour]",
         )
