@@ -272,7 +272,7 @@ where
         return Ok(());
     }
 
-    let _: () = conn.hdel(key, keys).await?;
+    conn.hdel(key, keys).await?;
 
     Ok(())
 }
