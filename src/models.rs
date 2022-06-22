@@ -15,7 +15,7 @@ use std::{
     ops::{Add, Sub},
 };
 use time::{format_description, Duration, OffsetDateTime};
-use twilight_gateway::{cluster::ClusterStartError, shard::LargeThresholdError};
+use twilight_gateway::cluster::ClusterStartError;
 use twilight_model::{
     channel::Channel,
     gateway::{payload::incoming::GuildCreate, presence::Presence, OpCode},
@@ -164,7 +164,6 @@ pub enum ApiError {
     ParseInt(ParseIntError),
     Lapin(LapinError),
     ClusterStart(ClusterStartError),
-    LargeThreshold(LargeThresholdError),
     Hyper(HyperError),
     HyperHttp(HyperHTTPError),
     AddrParse(AddrParseError),
@@ -219,12 +218,6 @@ impl From<LapinError> for ApiError {
 impl From<ClusterStartError> for ApiError {
     fn from(err: ClusterStartError) -> Self {
         Self::ClusterStart(err)
-    }
-}
-
-impl From<LargeThresholdError> for ApiError {
-    fn from(err: LargeThresholdError) -> Self {
-        Self::LargeThreshold(err)
     }
 }
 

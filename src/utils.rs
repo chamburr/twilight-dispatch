@@ -26,12 +26,12 @@ use twilight_gateway::{
 use twilight_http::client::Client;
 use twilight_model::{
     channel::{embed::Embed, Channel},
-    datetime::Timestamp,
     gateway::{
         payload::outgoing::update_presence::UpdatePresencePayload,
         presence::{Activity, UserOrId},
     },
     id::{marker::UserMarker, Id},
+    util::datetime::Timestamp,
 };
 
 lazy_static! {
@@ -149,7 +149,7 @@ pub async fn get_clusters(
             CONFIG.bot_token.clone(),
             Intents::from_bits(CONFIG.intents).unwrap(),
         )
-        .gateway_url(Some("wss://gateway.discord.gg".to_owned()))
+        .gateway_url("wss://gateway.discord.gg".to_owned())
         .shard_scheme(ShardScheme::Range {
             from: last_index,
             to: index,
@@ -182,7 +182,7 @@ pub async fn get_clusters(
             )
             .unwrap(),
         )
-        .large_threshold(CONFIG.large_threshold)?
+        .large_threshold(CONFIG.large_threshold)
         .resume_sessions(resumes.clone())
         .event_types(get_event_flags())
         .build()
