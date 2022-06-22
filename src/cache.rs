@@ -438,10 +438,14 @@ pub async fn update(
                 items.push((role_key(data.id, role.id), GuildItem::Role(role)));
             }
             for emoji in guild.emojis.drain(..) {
-                items.push((emoji_key(data.id, emoji.id), GuildItem::Emoji(emoji)));
+                if CONFIG.state_emoji {
+                    items.push((emoji_key(data.id, emoji.id), GuildItem::Emoji(emoji)));
+                }
             }
             for voice in guild.voice_states.drain(..) {
-                items.push((voice_key(data.id, voice.user_id), GuildItem::Voice(voice)));
+                if CONFIG.state_voice {
+                    items.push((voice_key(data.id, voice.user_id), GuildItem::Voice(voice)));
+                }
             }
             for member in guild.members.drain(..) {
                 if CONFIG.state_member || member.user.id == bot_id {
@@ -452,8 +456,8 @@ pub async fn update(
                 }
             }
             for presence in guild.presences.drain(..) {
-                let id = get_user_id(&presence.user);
                 if CONFIG.state_presence {
+                    let id = get_user_id(&presence.user);
                     items.push((presence_key(data.id, id), GuildItem::Presence(presence)));
                 }
             }
@@ -474,37 +478,39 @@ pub async fn update(
             old = clear_guild(conn, data.id).await?;
         }
         Event::GuildEmojisUpdate(data) => {
-            let keys: Vec<String> = get_members(
-                conn,
-                format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, data.guild_id),
-            )
-            .await?;
-            let emoji_keys: Vec<String> = keys
-                .into_iter()
-                .filter(|key| get_keys(key)[0] == EMOJI_KEY)
-                .collect();
-            let emojis: Vec<Emoji> = get_all(conn, emoji_keys.as_slice())
-                .await?
-                .into_iter()
-                .flatten()
-                .collect();
-            del_all(
-                conn,
-                emojis
-                    .iter()
-                    .filter(|emoji| !data.emojis.iter().any(|e| e.id == emoji.id))
-                    .map(|emoji| emoji_key(data.guild_id, emoji.id)),
-            )
-            .await?;
-            set_all(
-                conn,
-                data.emojis
-                    .iter()
-                    .map(|emoji| (emoji_key(data.guild_id, emoji.id), emoji)),
-            )
-            .await?;
-            if CONFIG.state_old {
-                old = Some(to_value(&emojis)?);
+            if CONFIG.state_emoji {
+                let keys: Vec<String> = get_members(
+                    conn,
+                    format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, data.guild_id),
+                )
+                .await?;
+                let emoji_keys: Vec<String> = keys
+                    .into_iter()
+                    .filter(|key| get_keys(key)[0] == EMOJI_KEY)
+                    .collect();
+                let emojis: Vec<Emoji> = get_all(conn, emoji_keys.as_slice())
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                del_all(
+                    conn,
+                    emojis
+                        .iter()
+                        .filter(|emoji| !data.emojis.iter().any(|e| e.id == emoji.id))
+                        .map(|emoji| emoji_key(data.guild_id, emoji.id)),
+                )
+                .await?;
+                set_all(
+                    conn,
+                    data.emojis
+                        .iter()
+                        .map(|emoji| (emoji_key(data.guild_id, emoji.id), emoji)),
+                )
+                .await?;
+                if CONFIG.state_old {
+                    old = Some(to_value(&emojis)?);
+                }
             }
         }
         Event::GuildUpdate(data) => {
@@ -694,14 +700,16 @@ pub async fn update(
             set(conn, BOT_USER_KEY, &data).await?;
         }
         Event::VoiceStateUpdate(data) => {
-            if let Some(guild_id) = data.0.guild_id {
-                let key = voice_key(guild_id, data.0.user_id);
-                if CONFIG.state_old {
-                    old = get(conn, &key).await?;
-                }
-                match data.0.channel_id {
-                    Some(_) => set(conn, &key, &data.0).await?,
-                    None => del(conn, &key).await?,
+            if CONFIG.state_voice {
+                if let Some(guild_id) = data.0.guild_id {
+                    let key = voice_key(guild_id, data.0.user_id);
+                    if CONFIG.state_old {
+                        old = get(conn, &key).await?;
+                    }
+                    match data.0.channel_id {
+                        Some(_) => set(conn, &key, &data.0).await?,
+                        None => del(conn, &key).await?,
+                    }
                 }
             }
         }
