@@ -20,8 +20,7 @@ use tokio::{
 };
 use tracing::warn;
 use twilight_gateway::{
-    cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, Event, EventTypeFlags,
-    Intents,
+    cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, Event, Intents,
 };
 use twilight_http::client::Client;
 use twilight_model::{
@@ -184,7 +183,6 @@ pub async fn get_clusters(
         )
         .large_threshold(CONFIG.large_threshold)
         .resume_sessions(resumes.clone())
-        .event_types(get_event_flags())
         .build()
         .await?;
 
@@ -230,58 +228,6 @@ pub async fn get_resume_sessions(
             )
         })
         .collect())
-}
-
-pub fn get_event_flags() -> EventTypeFlags {
-    let mut event_flags = EventTypeFlags::GATEWAY_HELLO
-        | EventTypeFlags::GATEWAY_INVALIDATE_SESSION
-        | EventTypeFlags::GATEWAY_RECONNECT
-        | EventTypeFlags::READY
-        | EventTypeFlags::RESUMED
-        | EventTypeFlags::SHARD_CONNECTED
-        | EventTypeFlags::SHARD_CONNECTING
-        | EventTypeFlags::SHARD_DISCONNECTED
-        | EventTypeFlags::SHARD_IDENTIFYING
-        | EventTypeFlags::SHARD_PAYLOAD
-        | EventTypeFlags::SHARD_RECONNECTING
-        | EventTypeFlags::SHARD_RESUMING;
-
-    if CONFIG.state_enabled {
-        event_flags |= EventTypeFlags::CHANNEL_CREATE
-            | EventTypeFlags::CHANNEL_DELETE
-            | EventTypeFlags::CHANNEL_PINS_UPDATE
-            | EventTypeFlags::CHANNEL_UPDATE
-            | EventTypeFlags::GUILD_CREATE
-            | EventTypeFlags::GUILD_DELETE
-            | EventTypeFlags::GUILD_EMOJIS_UPDATE
-            | EventTypeFlags::GUILD_UPDATE
-            | EventTypeFlags::ROLE_CREATE
-            | EventTypeFlags::ROLE_DELETE
-            | EventTypeFlags::ROLE_UPDATE
-            | EventTypeFlags::UNAVAILABLE_GUILD
-            | EventTypeFlags::USER_UPDATE
-            | EventTypeFlags::VOICE_STATE_UPDATE;
-
-        if CONFIG.state_member {
-            event_flags |= EventTypeFlags::MEMBER_ADD
-                | EventTypeFlags::MEMBER_REMOVE
-                | EventTypeFlags::MEMBER_CHUNK
-                | EventTypeFlags::MEMBER_UPDATE;
-
-            if CONFIG.state_presence {
-                event_flags |= EventTypeFlags::PRESENCE_UPDATE;
-            }
-        }
-
-        if CONFIG.state_message {
-            event_flags |= EventTypeFlags::MESSAGE_CREATE
-                | EventTypeFlags::MESSAGE_DELETE
-                | EventTypeFlags::MESSAGE_DELETE_BULK
-                | EventTypeFlags::MESSAGE_UPDATE;
-        }
-    }
-
-    event_flags
 }
 
 pub fn log_discord(color: usize, message: impl Into<String>) {
