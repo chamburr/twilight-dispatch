@@ -20,7 +20,8 @@ use tokio::{
 };
 use tracing::warn;
 use twilight_gateway::{
-    cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, Event, Intents,
+    cluster::ShardScheme, queue::Queue, shard::ResumeSession, Cluster, Event, EventTypeFlags,
+    Intents,
 };
 use twilight_http::client::Client;
 use twilight_model::{
@@ -183,6 +184,7 @@ pub async fn get_clusters(
         )
         .large_threshold(CONFIG.large_threshold)
         .resume_sessions(resumes.clone())
+        .event_types(EventTypeFlags::all())
         .build()
         .await?;
 
