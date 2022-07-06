@@ -5,7 +5,7 @@ use crate::{
     config::CONFIG,
     constants::{EXCHANGE, QUEUE_RECV, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY},
     models::{ApiResult, FormattedDateTime, SessionInfo},
-    utils::{get_clusters, get_queue, get_resume_sessions, get_shards},
+    utils::{get_clusters, get_current_user, get_queue, get_resume_sessions, get_shards},
 };
 
 use dotenv::dotenv;
@@ -142,6 +142,7 @@ async fn real_main() -> ApiResult<()> {
         )
     });
 
+    let user_id = get_current_user(&mut conn).await?.map(|user| user.id);
     for (cluster, events) in clusters.clone().into_iter().zip(events.into_iter()) {
         let cluster_clone = cluster.clone();
         tokio::spawn(async move {
@@ -152,7 +153,14 @@ async fn real_main() -> ApiResult<()> {
         let cluster_clone = cluster.clone();
         let channel_clone = channel.clone();
         tokio::spawn(async move {
-            handler::outgoing(&mut conn_clone, &cluster_clone, &channel_clone, events).await;
+            handler::outgoing(
+                &mut conn_clone,
+                &cluster_clone,
+                &channel_clone,
+                user_id,
+                events,
+            )
+            .await;
         });
     }
 

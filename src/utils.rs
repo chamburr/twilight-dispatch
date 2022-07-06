@@ -1,7 +1,7 @@
 use crate::{
     cache,
     config::CONFIG,
-    constants::{channel_key, private_channel_key, SESSIONS_KEY, SHARDS_KEY},
+    constants::{channel_key, private_channel_key, BOT_USER_KEY, SESSIONS_KEY, SHARDS_KEY},
     models::{ApiResult, SessionInfo},
 };
 
@@ -31,6 +31,7 @@ use twilight_model::{
         presence::{Activity, UserOrId},
     },
     id::{marker::UserMarker, Id},
+    user::CurrentUser,
     util::datetime::Timestamp,
 };
 
@@ -207,6 +208,12 @@ pub fn get_queue() -> Arc<dyn Queue> {
     }
 }
 
+pub async fn get_current_user(conn: &mut redis::aio::Connection) -> ApiResult<Option<CurrentUser>> {
+    let user = cache::get(conn, BOT_USER_KEY).await?;
+
+    Ok(user)
+}
+
 pub async fn get_resume_sessions(
     conn: &mut redis::aio::Connection,
 ) -> ApiResult<HashMap<u64, ResumeSession>> {
@@ -324,5 +331,5 @@ where
 }
 
 pub fn get_keys(value: &str) -> Vec<&str> {
-    return value.split(':').collect();
+    value.split(':').collect()
 }

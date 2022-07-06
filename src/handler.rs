@@ -21,24 +21,24 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::timeout;
 use tracing::{info, warn};
 use twilight_gateway::{shard::raw_message::Message, Cluster, Event};
+use twilight_model::id::{marker::UserMarker, Id};
 
 pub async fn outgoing(
     conn: &mut redis::aio::Connection,
     cluster: &Cluster,
     channel: &lapin::Channel,
+    mut bot_id: Option<Id<UserMarker>>,
     mut events: impl Stream<Item = (u64, Event)> + Send + Sync + Unpin + 'static,
 ) {
     let shard_strings: Vec<String> = (0..CONFIG.shards_total).map(|x| x.to_string()).collect();
-
-    let mut bot_id = None;
 
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
         let shard = shard as usize;
 
         if CONFIG.state_enabled {
-            if let Event::Ready(data) = &event {
-                if bot_id.is_none() {
+            if bot_id.is_none() {
+                if let Event::Ready(data) = &event {
                     bot_id = Some(data.user.id);
                 }
             }
