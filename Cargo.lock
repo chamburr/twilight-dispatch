@@ -393,7 +393,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f82b0f4c27ad9f8bfd1f3208d882da2b09c301bc1c828fd3a00d0216d2fbbff6"
 dependencies = [
  "crc32fast",
- "libz-sys",
+ "libz-ng-sys",
  "miniz_oxide",
 ]
 
@@ -736,16 +736,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
-name = "libz-sys"
+name = "libz-ng-sys"
 version = "1.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
+checksum = "4399ae96a9966bf581e726de86969f803a81b7ce795fcd5480e640589457e0f2"
 dependencies = [
- "cc",
  "cmake",
  "libc",
- "pkg-config",
- "vcpkg",
 ]
 
 [[package]]
@@ -937,12 +934,6 @@ dependencies = [
  "parking_lot",
  "tracing",
 ]
-
-[[package]]
-name = "pkg-config"
-version = "0.3.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1df8c4ec4b0627e53bdf214615ad287367e482558cf84b109250b37464dc03ae"
 
 [[package]]
 name = "polling"
@@ -1541,9 +1532,8 @@ dependencies = [
 
 [[package]]
 name = "twilight-gateway"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d952446d4dc7189d0908b48f254e94fdc154de88d45a55841c1cfcc76803180"
+version = "0.11.1"
+source = "git+https://github.com/chamburr/twilight?branch=fix-thread-message-count#8ee9a9d3994d860fe369077a5f66191a2bc98d30"
 dependencies = [
  "bitflags",
  "flate2",
@@ -1565,9 +1555,8 @@ dependencies = [
 
 [[package]]
 name = "twilight-gateway-queue"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f7951f688ea81c7f68bad1cfabbe1bb6bcc08984347e3075d20923b65ff2041"
+version = "0.11.1"
+source = "git+https://github.com/chamburr/twilight?branch=fix-thread-message-count#8ee9a9d3994d860fe369077a5f66191a2bc98d30"
 dependencies = [
  "tokio",
  "tracing",
@@ -1576,9 +1565,8 @@ dependencies = [
 
 [[package]]
 name = "twilight-http"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c02713ac747c27448be764d6629dcf4d07fbcd8fc855096b6e0ab6717c685be0"
+version = "0.11.1"
+source = "git+https://github.com/chamburr/twilight?branch=fix-thread-message-count#8ee9a9d3994d860fe369077a5f66191a2bc98d30"
 dependencies = [
  "hyper",
  "hyper-rustls",
@@ -1596,9 +1584,8 @@ dependencies = [
 
 [[package]]
 name = "twilight-http-ratelimiting"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8329e421d810eb18ddd41c3c1b78cbc6cd9e82b70850ac3f70d4e6d93e9ff72"
+version = "0.11.1"
+source = "git+https://github.com/chamburr/twilight?branch=fix-thread-message-count#8ee9a9d3994d860fe369077a5f66191a2bc98d30"
 dependencies = [
  "futures-util",
  "http",
@@ -1608,9 +1595,8 @@ dependencies = [
 
 [[package]]
 name = "twilight-model"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c44d87f62a032ea0d8053481672844cab0115330d99d655791be94a31d585256"
+version = "0.11.1"
+source = "git+https://github.com/chamburr/twilight?branch=fix-thread-message-count#8ee9a9d3994d860fe369077a5f66191a2bc98d30"
 dependencies = [
  "bitflags",
  "serde",
@@ -1622,9 +1608,8 @@ dependencies = [
 
 [[package]]
 name = "twilight-validate"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d8ee22c7e5321064abdd9ad1c6a7f0a7502db11db018a2f72326c9314bcea41"
+version = "0.11.1"
+source = "git+https://github.com/chamburr/twilight?branch=fix-thread-message-count#8ee9a9d3994d860fe369077a5f66191a2bc98d30"
 dependencies = [
  "twilight-model",
 ]
@@ -1697,12 +1682,6 @@ dependencies = [
  "itoa 0.4.8",
  "ryu",
 ]
-
-[[package]]
-name = "vcpkg"
-version = "0.2.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version_check"
