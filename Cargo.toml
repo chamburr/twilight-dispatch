@@ -19,26 +19,9 @@ time = { version = "0.3", default-features = false, features = ["std", "formatti
 tokio = { version = "1.2", default-features = false, features = ["rt-multi-thread", "macros", "signal", "time"] }
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "fmt"] }
-#twilight-gateway = { version = "0.11", default-features = false, features = ["rustls-webpki-roots", "simd-json", "zlib-simd"] }
-#twilight-http = { version = "0.11", default-features = false, features = ["simd-json"] }
-#twilight-model = { version = "0.11", default-features = false }
-
-[dependencies.twilight-gateway]
-git = "https://github.com/chamburr/twilight"
-branch = "fix-thread-message-count"
-default-features = false
-features = ["rustls-webpki-roots", "simd-json", "zlib-simd"] 
-
-[dependencies.twilight-http]
-git = "https://github.com/chamburr/twilight"
-branch = "fix-thread-message-count"
-default-features = false
-features = ["simd-json"]
-
-[dependencies.twilight-model]
-git = "https://github.com/chamburr/twilight"
-branch = "fix-thread-message-count"
-default-features = false
+twilight-gateway = { version = "0.11", default-features = false, features = ["rustls-webpki-roots", "simd-json", "zlib-simd"] }
+twilight-http = { version = "0.11", default-features = false, features = ["simd-json"] }
+twilight-model = { version = "0.11", default-features = false }
 
 [patch.crates-io]
 hyper-rustls = { git = "https://github.com/ctz/hyper-rustls" }
