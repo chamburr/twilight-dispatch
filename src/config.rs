@@ -38,6 +38,8 @@ lazy_static! {
             rabbit_password: get_env("RABBIT_PASSWORD"),
             redis_host: get_env("REDIS_HOST"),
             redis_port: get_env_as("REDIS_PORT"),
+            redis_password: get_env_as("REDIS_PASSWORD"),
+            redis_username: get_env_as("REDIS_USERNAME"),
             prometheus_host: get_env("PROMETHEUS_HOST"),
             prometheus_port: get_env_as("PROMETHEUS_PORT"),
         }
@@ -78,6 +80,8 @@ pub struct Config {
     pub rabbit_password: String,
     pub redis_host: String,
     pub redis_port: u64,
+    pub redis_password: String,
+    pub redis_username: String,
     pub prometheus_host: String,
     pub prometheus_port: u64,
 }
