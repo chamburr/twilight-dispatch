@@ -38,6 +38,8 @@ lazy_static! {
             rabbit_password: get_env("RABBIT_PASSWORD"),
             redis_host: get_env("REDIS_HOST"),
             redis_port: get_env_as("REDIS_PORT"),
+            redis_password: get_optional_env_as("REDIS_PASSWORD", ""),
+            redis_username: get_optional_env_as("REDIS_USERNAME", ""),
             prometheus_host: get_env("PROMETHEUS_HOST"),
             prometheus_port: get_env_as("PROMETHEUS_PORT"),
         }
@@ -78,12 +80,22 @@ pub struct Config {
     pub rabbit_password: String,
     pub redis_host: String,
     pub redis_port: u64,
+    pub redis_password: String,
+    pub redis_username: String,
     pub prometheus_host: String,
     pub prometheus_port: u64,
 }
 
 fn get_env(name: &str) -> String {
     env::var(name).unwrap_or_else(|_| panic!("Missing environmental variable: {}", name))
+}
+
+fn get_optional_env_as<T: DeserializeOwned, V: ToString>(name: &str, default_value: V) -> T {
+    let mut variable = env::var(name).unwrap_or(default_value.to_string());
+
+    simd_json::from_str(variable.as_mut_str())
+        .or_else(|_| simd_json::from_str(format!(r#""{}""#, variable).as_mut_str()))
+        .unwrap_or_else(|_| panic!("Invalid environmental variable: {}", name))
 }
 
 fn get_env_as<T: DeserializeOwned>(name: &str) -> T {
