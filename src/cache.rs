@@ -120,26 +120,28 @@ where
             let parts = get_keys(key);
 
             let new_key = if parts.len() > 2 && parts[0] == CHANNEL_KEY {
-                format!("{}:{}", parts[0], parts[2])
+                format!("{{{tag}}}:{}:{}", parts[0], parts[2], tag = CHANNEL_KEY)
+            } else if parts.len() > 2 {
+                format!("{{{key}:{value}}}:{}:{}:{}", parts[0], parts[1], parts[2], key = parts[0], value = parts[1])
             } else {
                 key.to_owned()
             };
 
             if parts.len() > 1 {
                 members
-                    .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
+                    .entry(format!("{{{tag}}}:{}{}", parts[0], KEYS_SUFFIX, tag = parts[0]))
                     .or_insert_with(Vec::new)
                     .push(new_key.clone());
             }
 
             if parts.len() > 2 && parts[0] != MESSAGE_KEY {
                 members
-                    .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
+                    .entry(format!("{{{key}:{value}}}:{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1], key = parts[0], value = parts[1]))
                     .or_insert_with(Vec::new)
                     .push(new_key.clone());
             } else if parts.len() > 2 {
                 members
-                    .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
+                    .entry(format!("{{{key}{suffix}:{value}}}:{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1], key = CHANNEL_KEY, suffix = KEYS_SUFFIX, value = parts[1]))
                     .or_insert_with(Vec::new)
                     .push(new_key.clone());
             }
@@ -211,14 +213,16 @@ where
             let parts = get_keys(key);
 
             let new_key = if parts.len() > 2 && parts[0] == CHANNEL_KEY {
-                format!("{}:{}", parts[0], parts[2])
+                format!("{{{tag}}}:{}:{}", parts[0], parts[2], tag = CHANNEL_KEY)
+            } else if parts.len() > 2 {
+                format!("{{{key}:{value}}}:{}:{}:{}", parts[0], parts[1], parts[2], key = parts[0], value = parts[1])
             } else {
                 key.to_owned()
             };
 
             if parts.len() > 1 {
                 members
-                    .entry(format!("{}{}", parts[0], KEYS_SUFFIX))
+                    .entry(format!("{{{tag}}}:{}{}", parts[0], KEYS_SUFFIX, tag = parts[0]))
                     .or_insert_with(Vec::new)
                     .push(new_key.clone());
             }
@@ -226,12 +230,12 @@ where
             if parts.len() > 2 {
                 if parts[0] != MESSAGE_KEY {
                     members
-                        .entry(format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1]))
+                        .entry(format!("{{{key}:{value}}}:{}{}:{}", GUILD_KEY, KEYS_SUFFIX, parts[1], key = parts[0], value = parts[1]))
                         .or_insert_with(Vec::new)
                         .push(new_key.clone());
                 } else {
                     members
-                        .entry(format!("{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1]))
+                        .entry(format!("{{{key}{suffix}:{value}}}:{}{}:{}", CHANNEL_KEY, KEYS_SUFFIX, parts[1], key = CHANNEL_KEY, suffix = KEYS_SUFFIX, value = parts[1]))
                         .or_insert_with(Vec::new)
                         .push(new_key.clone());
                 }
