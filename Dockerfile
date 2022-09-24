@@ -5,7 +5,8 @@ RUN apk add --no-cache curl clang gcc musl-dev lld cmake make && \
 
 ENV CC clang
 ENV CFLAGS "-I/usr/lib/gcc/x86_64-alpine-linux-musl/11.2.1 -L/usr/lib/gcc/x86_64-alpine-linux-musl/11.2.1/"
-ENV RUSTFLAGS "-C link-arg=-fuse-ld=lld -C target-cpu=haswell"
+ARG TARGET_CPU
+ENV RUSTFLAGS "-C link-arg=-fuse-ld=lld -C target-cpu=${TARGET_CPU}"
 
 RUN rm /usr/bin/ld && \
     rm /usr/bin/cc && \
