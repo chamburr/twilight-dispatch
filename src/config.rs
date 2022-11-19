@@ -89,7 +89,7 @@ fn get_env(name: &str) -> String {
 fn get_env_as<T: DeserializeOwned>(name: &str) -> T {
     let mut variable = get_env(name);
 
-    simd_json::from_str(variable.as_mut_str())
-        .or_else(|_| simd_json::from_str(format!(r#""{}""#, variable).as_mut_str()))
+    unsafe { simd_json::from_str(variable.as_mut_str()) }
+        .or_else(|_| unsafe { simd_json::from_str(format!(r#""{}""#, variable).as_mut_str()) })
         .unwrap_or_else(|_| panic!("Invalid environmental variable: {}", name))
 }
