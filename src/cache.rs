@@ -35,7 +35,7 @@ where
     let res: Option<String> = conn.get(key).await?;
 
     Ok(res
-        .map(|mut value| simd_json::from_str(value.as_mut_str()))
+        .map(|mut value| unsafe { simd_json::from_str(value.as_mut_str()) })
         .transpose()?)
 }
 
@@ -56,7 +56,9 @@ where
     res.into_iter()
         .map(|option| {
             option
-                .map(|mut value| simd_json::from_str(value.as_mut_str()).map_err(ApiError::from))
+                .map(|mut value| unsafe {
+                    simd_json::from_str(value.as_mut_str()).map_err(ApiError::from)
+                })
                 .transpose()
         })
         .collect()
@@ -342,7 +344,7 @@ pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
                 let mut keys = vec![];
 
                 for (key, mut value) in hashmap {
-                    match simd_json::from_str::<FormattedDateTime>(value.as_mut_str()) {
+                    match unsafe { simd_json::from_str::<FormattedDateTime>(value.as_mut_str()) } {
                         Ok(timestamp) => {
                             if (timestamp - FormattedDateTime::now()).is_negative() {
                                 keys.push(key);

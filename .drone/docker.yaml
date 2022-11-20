@@ -1,0 +1,21 @@
+---
+kind: pipeline
+name: docker
+
+steps:
+  - name: publish
+    image: plugins/docker
+    settings:
+      repo: chamburr/twilight-dispatch
+      auto_tag: true
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+
+trigger:
+  event:
+    - push
+    - tag
+  branch:
+    - master
