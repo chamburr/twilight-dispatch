@@ -25,7 +25,7 @@ use twilight_gateway::{
 };
 use twilight_http::client::Client;
 use twilight_model::{
-    channel::{message::embed::Embed, Channel},
+    channel::{embed::Embed, Channel},
     gateway::{
         payload::outgoing::update_presence::UpdatePresencePayload,
         presence::{Activity, UserOrId},
@@ -271,7 +271,7 @@ pub fn log_discord(color: usize, message: impl Into<String>) {
             .embeds(embeds);
 
         if let Ok(message) = message {
-            if let Err(err) = message.await {
+            if let Err(err) = message.exec().await {
                 warn!("Failed to post message to Discord: {:?}", err)
             }
         }
@@ -310,7 +310,7 @@ pub fn log_discord_guild(color: usize, title: impl Into<String>, message: impl I
             .embeds(embeds);
 
         if let Ok(message) = message {
-            if let Err(err) = message.await {
+            if let Err(err) = message.exec().await {
                 warn!("Failed to post message to Discord: {:?}", err)
             }
         }
