@@ -375,16 +375,21 @@ async fn clear_guild<T: DeserializeOwned>(
     conn: &mut redis::aio::Connection,
     guild_id: Id<GuildMarker>,
 ) -> ApiResult<Option<T>> {
-    let members: Vec<String> =
-        get_members(conn, format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, guild_id)).await?;
+    let members: ApiResult<Vec<String>> =
+        get_members(conn, format!("{}{}:{}", GUILD_KEY, KEYS_SUFFIX, guild_id)).await;
 
-    del_all(conn, members).await?;
+    if let Ok(members) = members {
+        del_all(conn, members).await?;
+    }
 
-    let guild = get(conn, guild_key(guild_id)).await?;
+    let guild: ApiResult<Option<T>> = get(conn, guild_key(guild_id)).await;
 
-    del(conn, guild_key(guild_id)).await?;
+    if let Ok(guild) = guild {
+        del(conn, guild_key(guild_id)).await?;
+        return Ok(guild);
+    }
 
-    Ok(guild)
+    Ok(None)
 }
 
 pub async fn update(
