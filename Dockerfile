@@ -2,7 +2,7 @@ FROM rust:1.65-alpine AS builder
 
 ENV RUSTFLAGS "-C target-cpu=haswell"
 
-RUN apk add --no-cache musl-dev openssl-dev
+RUN apk add --no-cache gcc g++ musl-dev cmake make
 
 WORKDIR /build
 
