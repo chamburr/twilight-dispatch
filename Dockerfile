@@ -1,6 +1,6 @@
 FROM rust:1.65-alpine AS builder
 
-ENV RUSTFLAGS "-Lnative=/usr/lib -Z mir-opt-level=3 -C target-cpu=haswell"
+ENV RUSTFLAGS "-C target-cpu=haswell"
 
 RUN apk add --no-cache musl-dev openssl-dev
 
