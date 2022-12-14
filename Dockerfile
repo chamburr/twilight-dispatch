@@ -1,34 +1,32 @@
-FROM docker.io/library/alpine:latest AS builder
+FROM rust:1.65-alpine AS builder
 
 ENV RUSTFLAGS "-Lnative=/usr/lib -Z mir-opt-level=3 -C target-cpu=haswell"
 
-RUN apk add --no-cache curl gcc g++ musl-dev cmake make && \
-    curl -sSf https://sh.rustup.rs | sh -s -- --profile minimal --default-toolchain nightly -y
+RUN apk add --no-cache musl-dev openssl-dev
 
 WORKDIR /build
 
-COPY ./Cargo.lock ./Cargo.lock
-COPY ./Cargo.toml ./Cargo.toml
-COPY ./.cargo ./.cargo
+COPY .cargo ./.cargo
+COPY Cargo.toml Cargo.lock ./
 
-RUN mkdir src/
+RUN mkdir src
 RUN echo 'fn main() {}' > ./src/main.rs
-RUN source $HOME/.cargo/env && \
-    cargo build --release
-
+RUN cargo build --release
 RUN rm -f target/release/deps/twilight_dispatch*
 
-COPY ./src ./src
+COPY src ./src
 
-RUN source $HOME/.cargo/env && \
-    cargo build --release && \
-    strip /build/target/release/twilight-dispatch
+RUN cargo build --release
 
-FROM docker.io/library/alpine:latest
+FROM alpine:3.17
 
 RUN apk add --no-cache dumb-init
 
-COPY --from=builder /build/target/release/twilight-dispatch /twilight-dispatch
+WORKDIR /app
+
+COPY --from=builder /build/target/release/twilight-dispatch ./
+
+EXPOSE 8005
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["./twilight-dispatch"]
