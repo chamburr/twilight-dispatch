@@ -18,8 +18,7 @@ use lapin::{
 };
 use redis::aio::MultiplexedConnection;
 use simd_json::{json, ValueAccess};
-use std::{sync::Arc, time::Duration};
-use tokio::time::timeout;
+use std::sync::Arc;
 use tracing::{info, warn};
 use twilight_gateway::{shard::raw_message::Message, Cluster, Event, EventType};
 use twilight_model::id::{marker::UserMarker, Id};
@@ -40,20 +39,12 @@ pub async fn outgoing(
             let mut old = None;
 
             if CONFIG.state_enabled && event.kind() != EventType::ShardPayload {
-                match timeout(
-                    Duration::from_millis(10000),
-                    cache::update(&mut conn_clone, &event, bot_id),
-                )
-                .await
-                {
-                    Ok(Ok(value)) => {
+                match cache::update(&mut conn_clone, &event, bot_id).await {
+                    Ok(value) => {
                         old = value;
                     }
-                    Ok(Err(err)) => {
+                    Err(err) => {
                         warn!("[Shard {}] Failed to update state: {:?}", shard, err);
-                    }
-                    Err(_) => {
-                        warn!("[Shard {}] Timed out while updating state", shard);
                     }
                 }
             }
