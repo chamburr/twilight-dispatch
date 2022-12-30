@@ -1,4 +1,4 @@
-use hyper::{http::Error as HyperHTTPError, Error as HyperError};
+use hyper::{http::Error as HyperHttpError, Error as HyperError};
 use lapin::Error as LapinError;
 use prometheus::Error as PrometheusError;
 use redis::RedisError;
@@ -16,6 +16,7 @@ use std::{
 };
 use time::{format_description, Duration, OffsetDateTime};
 use twilight_gateway::cluster::ClusterStartError;
+use twilight_http::{response::DeserializeBodyError, Error as TwilightHttpError};
 use twilight_model::{
     channel::Channel,
     gateway::{payload::incoming::GuildCreate, presence::Presence, OpCode},
@@ -155,8 +156,24 @@ pub enum GuildItem {
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
-#[derive(Debug)]
-pub enum ApiError {
+macro_rules! make_api_errors {
+    ($($name:ident($ty:ty)),*) => {
+        #[derive(Debug)]
+        pub enum ApiError {
+            $($name($ty)),*
+        }
+
+        $(
+            impl From<$ty> for ApiError {
+                fn from(err: $ty) -> Self {
+                    Self::$name(err)
+                }
+            }
+        )*
+    }
+}
+
+make_api_errors! {
     Empty(()),
     SimdJson(SimdJsonError),
     Redis(RedisError),
@@ -165,10 +182,12 @@ pub enum ApiError {
     Lapin(LapinError),
     ClusterStart(ClusterStartError),
     Hyper(HyperError),
-    HyperHttp(HyperHTTPError),
+    HyperHttp(HyperHttpError),
     AddrParse(AddrParseError),
     Prometheus(PrometheusError),
     Io(IoError),
+    TwilightHttp(TwilightHttpError),
+    DeserializeBody(DeserializeBodyError)
 }
 
 impl Error for ApiError {}
@@ -176,77 +195,5 @@ impl Error for ApiError {}
 impl Display for ApiError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
-    }
-}
-
-impl From<()> for ApiError {
-    fn from(_: ()) -> Self {
-        Self::Empty(())
-    }
-}
-
-impl From<SimdJsonError> for ApiError {
-    fn from(err: SimdJsonError) -> Self {
-        Self::SimdJson(err)
-    }
-}
-
-impl From<RedisError> for ApiError {
-    fn from(err: RedisError) -> Self {
-        Self::Redis(err)
-    }
-}
-
-impl From<VarError> for ApiError {
-    fn from(err: VarError) -> Self {
-        Self::Var(err)
-    }
-}
-
-impl From<ParseIntError> for ApiError {
-    fn from(err: ParseIntError) -> Self {
-        Self::ParseInt(err)
-    }
-}
-
-impl From<LapinError> for ApiError {
-    fn from(err: LapinError) -> Self {
-        Self::Lapin(err)
-    }
-}
-
-impl From<ClusterStartError> for ApiError {
-    fn from(err: ClusterStartError) -> Self {
-        Self::ClusterStart(err)
-    }
-}
-
-impl From<HyperError> for ApiError {
-    fn from(err: HyperError) -> Self {
-        Self::Hyper(err)
-    }
-}
-
-impl From<HyperHTTPError> for ApiError {
-    fn from(err: HyperHTTPError) -> Self {
-        Self::HyperHttp(err)
-    }
-}
-
-impl From<AddrParseError> for ApiError {
-    fn from(err: AddrParseError) -> Self {
-        Self::AddrParse(err)
-    }
-}
-
-impl From<PrometheusError> for ApiError {
-    fn from(err: PrometheusError) -> Self {
-        Self::Prometheus(err)
-    }
-}
-
-impl From<IoError> for ApiError {
-    fn from(err: IoError) -> Self {
-        Self::Io(err)
     }
 }

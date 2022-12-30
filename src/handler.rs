@@ -16,49 +16,39 @@ use lapin::{
     types::FieldTable,
     BasicProperties, Channel,
 };
+use redis::aio::MultiplexedConnection;
 use simd_json::{json, ValueAccess};
 use std::{sync::Arc, time::Duration};
 use tokio::time::timeout;
 use tracing::{info, warn};
-use twilight_gateway::{shard::raw_message::Message, Cluster, Event};
+use twilight_gateway::{shard::raw_message::Message, Cluster, Event, EventType};
 use twilight_model::id::{marker::UserMarker, Id};
 
 pub async fn outgoing(
-    conn: &mut redis::aio::Connection,
-    cluster: &Cluster,
-    channel: &lapin::Channel,
-    mut bot_id: Option<Id<UserMarker>>,
+    mut conn: MultiplexedConnection,
+    cluster: Arc<Cluster>,
+    channel: Channel,
+    bot_id: Id<UserMarker>,
     mut events: impl Stream<Item = (u64, Event)> + Send + Sync + Unpin + 'static,
 ) {
-    let shard_strings: Vec<String> = (0..CONFIG.shards_total).map(|x| x.to_string()).collect();
-
     while let Some((shard, event)) = events.next().await {
         let mut old = None;
-        let shard = shard as usize;
 
-        if CONFIG.state_enabled {
-            if bot_id.is_none() {
-                if let Event::Ready(data) = &event {
-                    bot_id = Some(data.user.id);
+        if CONFIG.state_enabled && event.kind() != EventType::ShardPayload {
+            match timeout(
+                Duration::from_millis(10000),
+                cache::update(&mut conn, &event, bot_id),
+            )
+            .await
+            {
+                Ok(Ok(value)) => {
+                    old = value;
                 }
-            }
-
-            if let Some(bot_id) = bot_id {
-                match timeout(
-                    Duration::from_millis(10000),
-                    cache::update(conn, &event, bot_id),
-                )
-                .await
-                {
-                    Ok(Ok(value)) => {
-                        old = value;
-                    }
-                    Ok(Err(err)) => {
-                        warn!("[Shard {}] Failed to update state: {:?}", shard, err);
-                    }
-                    Err(_) => {
-                        warn!("[Shard {}] Timed out while updating state", shard);
-                    }
+                Ok(Err(err)) => {
+                    warn!("[Shard {}] Failed to update state: {:?}", shard, err);
+                }
+                Err(_) => {
+                    warn!("[Shard {}] Timed out while updating state", shard);
                 }
             }
         }
@@ -76,7 +66,7 @@ pub async fn outgoing(
                 SHARD_EVENTS.with_label_values(&["Ready"]).inc();
             }
             Event::Resumed => {
-                if let Some(Ok(info)) = cluster.shard(shard as u64).map(|s| s.info()) {
+                if let Some(Ok(info)) = cluster.shard(shard).map(|shard| shard.info()) {
                     info!(
                         "[Shard {}] Resumed (session: {})",
                         shard,
@@ -126,12 +116,41 @@ pub async fn outgoing(
                 info!("[Shard {}] Resuming (sequence: {})", shard, data.seq);
                 SHARD_EVENTS.with_label_values(&["Resuming"]).inc();
             }
+            Event::GuildCreate(data) => {
+                if old.is_none() {
+                    GUILD_EVENTS.with_label_values(&["Join"]).inc();
+                    log_discord_guild(
+                        JOIN_COLOR,
+                        "Guild Join",
+                        format!("{} ({})", data.name, data.id),
+                    );
+                }
+            }
+            Event::GuildDelete(data) => {
+                if !data.unavailable {
+                    GUILD_EVENTS.with_label_values(&["Leave"]).inc();
+                    let old_data = old.unwrap_or(json!({}));
+                    let guild = old_data.as_object().unwrap();
+                    log_discord_guild(
+                        LEAVE_COLOR,
+                        "Guild Leave",
+                        format!(
+                            "{} ({})",
+                            guild
+                                .get("name")
+                                .and_then(|name| name.as_str())
+                                .unwrap_or("Unknown"),
+                            guild.get("id").and_then(|id| id.as_str()).unwrap_or("0")
+                        ),
+                    );
+                }
+            }
             Event::ShardPayload(mut data) => {
                 match simd_json::from_slice::<PayloadInfo>(data.bytes.as_mut_slice()) {
                     Ok(mut payload) => {
                         if let Some(kind) = payload.t.as_deref() {
                             GATEWAY_EVENTS
-                                .with_label_values(&[kind, shard_strings[shard as usize].as_str()])
+                                .with_label_values(&[kind, shard.to_string().as_str()])
                                 .inc();
 
                             payload.old = old;
@@ -167,35 +186,6 @@ pub async fn outgoing(
                     Err(err) => {
                         warn!("[Shard {}] Could not decode payload: {:?}", shard, err);
                     }
-                }
-            }
-            Event::GuildCreate(data) => {
-                if old.is_none() {
-                    GUILD_EVENTS.with_label_values(&["Join"]).inc();
-                    log_discord_guild(
-                        JOIN_COLOR,
-                        "Guild Join",
-                        format!("{} ({})", data.name, data.id),
-                    );
-                }
-            }
-            Event::GuildDelete(data) => {
-                if !data.unavailable {
-                    GUILD_EVENTS.with_label_values(&["Leave"]).inc();
-                    let old_data = old.unwrap_or(json!({}));
-                    let guild = old_data.as_object().unwrap();
-                    log_discord_guild(
-                        LEAVE_COLOR,
-                        "Guild Leave",
-                        format!(
-                            "{} ({})",
-                            guild
-                                .get("name")
-                                .and_then(|name| name.as_str())
-                                .unwrap_or("Unknown"),
-                            guild.get("id").and_then(|id| id.as_str()).unwrap_or("0")
-                        ),
-                    );
                 }
             }
             _ => {}

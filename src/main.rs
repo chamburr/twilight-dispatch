@@ -2,23 +2,21 @@
 #![deny(clippy::all, nonstandard_style, rust_2018_idioms, unused, warnings)]
 
 use crate::{
+    cluster::get_clusters,
     config::CONFIG,
-    constants::{EXCHANGE, QUEUE_RECV, QUEUE_SEND, SESSIONS_KEY, SHARDS_KEY, STARTED_KEY},
+    constants::{SESSIONS_KEY, SHARDS_KEY, STARTED_KEY},
     models::{ApiResult, FormattedDateTime, SessionInfo},
-    utils::{get_clusters, get_current_user, get_queue, get_resume_sessions, get_shards},
+    utils::{declare_queues, get_current_user},
 };
 
 use dotenv::dotenv;
-use lapin::{
-    options::{ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions},
-    types::FieldTable,
-    ExchangeKind,
-};
+use lapin::ConnectionProperties;
 use std::collections::HashMap;
 use tokio::{join, signal::ctrl_c};
 use tracing::{error, info};
 
 mod cache;
+mod cluster;
 mod config;
 mod constants;
 mod handler;
@@ -44,7 +42,7 @@ async fn real_main() -> ApiResult<()> {
         CONFIG.redis_host, CONFIG.redis_port
     ))?;
 
-    let mut conn = redis.get_async_connection().await?;
+    let mut conn = redis.get_multiplexed_tokio_connection().await?;
 
     let amqp = lapin::Connection::connect(
         format!(
@@ -52,76 +50,20 @@ async fn real_main() -> ApiResult<()> {
             CONFIG.rabbit_username, CONFIG.rabbit_password, CONFIG.rabbit_host, CONFIG.rabbit_port
         )
         .as_str(),
-        lapin::ConnectionProperties::default(),
+        ConnectionProperties::default(),
     )
     .await?;
 
     let channel = amqp.create_channel().await?;
     let channel_send = amqp.create_channel().await?;
+    declare_queues(&channel, &channel_send).await?;
 
-    channel
-        .exchange_declare(
-            EXCHANGE,
-            ExchangeKind::Topic,
-            ExchangeDeclareOptions {
-                passive: false,
-                durable: true,
-                auto_delete: false,
-                internal: false,
-                nowait: false,
-            },
-            FieldTable::default(),
-        )
-        .await?;
-    channel_send
-        .queue_declare(
-            QUEUE_SEND,
-            QueueDeclareOptions {
-                passive: false,
-                durable: true,
-                exclusive: false,
-                auto_delete: false,
-                nowait: false,
-            },
-            FieldTable::default(),
-        )
-        .await?;
+    let user = get_current_user().await?;
+    let (clusters, events, info) = get_clusters(&mut conn).await?;
 
-    if CONFIG.default_queue {
-        channel
-            .queue_declare(
-                QUEUE_RECV,
-                QueueDeclareOptions {
-                    passive: false,
-                    durable: true,
-                    exclusive: false,
-                    auto_delete: false,
-                    nowait: false,
-                },
-                FieldTable::default(),
-            )
-            .await?;
-
-        channel
-            .queue_bind(
-                QUEUE_RECV,
-                EXCHANGE,
-                "#",
-                QueueBindOptions::default(),
-                FieldTable::default(),
-            )
-            .await?;
-    }
-
-    let shards = get_shards();
-    let resumes = get_resume_sessions(&mut conn).await?;
-    let resumes_len = resumes.len();
-    let queue = get_queue();
-    let (clusters, events) = get_clusters(resumes, queue).await?;
-
-    info!("Starting up {} clusters", clusters.len());
-    info!("Starting up {} shards", shards);
-    info!("Resuming {} sessions", resumes_len);
+    info!("Starting up {} clusters", info.clusters);
+    info!("Starting up {} shards", info.shards);
+    info!("Resuming {} sessions", info.resumes);
 
     cache::set(&mut conn, STARTED_KEY, &FormattedDateTime::now()).await?;
     cache::set(&mut conn, SHARDS_KEY, &CONFIG.shards_total).await?;
@@ -130,37 +72,26 @@ async fn real_main() -> ApiResult<()> {
         let _ = metrics::run_server().await;
     });
 
-    let mut conn_clone = redis.get_async_connection().await?;
-    let mut conn_clone_two = redis.get_async_connection().await?;
-    let mut conn_clone_three = redis.get_async_connection().await?;
+    let conn_clone = conn.clone();
     let clusters_clone = clusters.clone();
     tokio::spawn(async move {
         join!(
-            cache::run_jobs(&mut conn_clone, clusters_clone.as_slice()),
-            cache::run_cleanups(&mut conn_clone_two),
-            metrics::run_jobs(&mut conn_clone_three, clusters_clone.as_slice()),
+            cache::run_jobs(conn_clone.clone(), clusters_clone.as_slice()),
+            metrics::run_jobs(conn_clone.clone(), clusters_clone.as_slice()),
         )
     });
 
-    let user_id = get_current_user(&mut conn).await?.map(|user| user.id);
     for (cluster, events) in clusters.clone().into_iter().zip(events.into_iter()) {
         let cluster_clone = cluster.clone();
         tokio::spawn(async move {
             cluster_clone.up().await;
         });
 
-        let mut conn_clone = redis.get_async_connection().await?;
+        let conn_clone = redis.get_multiplexed_tokio_connection().await?;
         let cluster_clone = cluster.clone();
         let channel_clone = channel.clone();
         tokio::spawn(async move {
-            handler::outgoing(
-                &mut conn_clone,
-                &cluster_clone,
-                &channel_clone,
-                user_id,
-                events,
-            )
-            .await;
+            handler::outgoing(conn_clone, cluster_clone, channel_clone, user.id, events).await;
         });
     }
 

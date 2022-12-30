@@ -3,7 +3,7 @@ use crate::{
     config::CONFIG,
     constants::{
         CHANNEL_KEY, EMOJI_KEY, GUILD_KEY, KEYS_SUFFIX, MEMBER_KEY, MESSAGE_KEY,
-        METRICS_DUMP_INTERVAL, PRESENCE_KEY, ROLE_KEY, VOICE_KEY,
+        METRICS_JOB_INTERVAL, PRESENCE_KEY, ROLE_KEY, VOICE_KEY,
     },
     models::ApiResult,
 };
@@ -19,6 +19,7 @@ use prometheus::{
     register_int_counter_vec, register_int_gauge, register_int_gauge_vec, Encoder, IntCounterVec,
     IntGauge, IntGaugeVec, TextEncoder,
 };
+use redis::aio::MultiplexedConnection;
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -131,7 +132,7 @@ struct StateStats {
     voices: u64,
 }
 
-async fn get_state_stats(conn: &mut redis::aio::Connection) -> ApiResult<StateStats> {
+async fn get_state_stats(conn: &mut MultiplexedConnection) -> ApiResult<StateStats> {
     let guilds = cache::get_members_len(conn, format!("{}{}", GUILD_KEY, KEYS_SUFFIX)).await?;
     let channels = cache::get_members_len(conn, format!("{}{}", CHANNEL_KEY, KEYS_SUFFIX)).await?;
     let messages = cache::get_members_len(conn, format!("{}{}", MESSAGE_KEY, KEYS_SUFFIX)).await?;
@@ -154,7 +155,7 @@ async fn get_state_stats(conn: &mut redis::aio::Connection) -> ApiResult<StateSt
     })
 }
 
-pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Arc<Cluster>]) {
+pub async fn run_jobs(mut conn: MultiplexedConnection, clusters: &[Arc<Cluster>]) {
     loop {
         GATEWAY_SHARDS.set(
             clusters
@@ -195,7 +196,7 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Arc<Cluster
                 .set(amount);
         }
 
-        match get_state_stats(conn).await {
+        match get_state_stats(&mut conn).await {
             Ok(stats) => {
                 STATE_GUILDS.set(stats.guilds as i64);
                 STATE_CHANNELS.set(stats.channels as i64);
@@ -211,6 +212,6 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Arc<Cluster
             }
         }
 
-        sleep(Duration::from_millis(METRICS_DUMP_INTERVAL as u64)).await;
+        sleep(Duration::from_millis(METRICS_JOB_INTERVAL as u64)).await;
     }
 }

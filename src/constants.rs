@@ -25,9 +25,8 @@ pub const VOICE_KEY: &str = "voice";
 pub const KEYS_SUFFIX: &str = "_keys";
 pub const EXPIRY_KEYS: &str = "expiry_keys";
 
-pub const CACHE_DUMP_INTERVAL: usize = 1000;
-pub const CACHE_CLEANUP_INTERVAL: usize = 1000;
-pub const METRICS_DUMP_INTERVAL: usize = 1000;
+pub const CACHE_JOB_INTERVAL: usize = 1000;
+pub const METRICS_JOB_INTERVAL: usize = 1000;
 
 pub const CONNECT_COLOR: usize = 0x00FF00;
 pub const DISCONNECT_COLOR: usize = 0xFF0000;
@@ -40,11 +39,19 @@ pub fn guild_key(guild: Id<GuildMarker>) -> String {
     format!("{}:{}", GUILD_KEY, guild)
 }
 
-pub fn channel_key(guild: Id<GuildMarker>, channel: Id<ChannelMarker>) -> String {
+pub fn channel_key(guild: Option<Id<GuildMarker>>, channel: Id<ChannelMarker>) -> String {
+    if let Some(guild) = guild {
+        guild_channel_key(guild, channel)
+    } else {
+        private_channel_key(channel)
+    }
+}
+
+fn guild_channel_key(guild: Id<GuildMarker>, channel: Id<ChannelMarker>) -> String {
     format!("{}:{}:{}", CHANNEL_KEY, guild, channel)
 }
 
-pub fn private_channel_key(channel: Id<ChannelMarker>) -> String {
+fn private_channel_key(channel: Id<ChannelMarker>) -> String {
     format!("{}:{}", CHANNEL_KEY, channel)
 }
 

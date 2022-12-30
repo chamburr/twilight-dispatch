@@ -1,16 +1,15 @@
 use crate::{
     config::CONFIG,
     constants::{
-        channel_key, emoji_key, guild_key, member_key, message_key, presence_key,
-        private_channel_key, role_key, voice_key, BOT_USER_KEY, CACHE_CLEANUP_INTERVAL,
-        CACHE_DUMP_INTERVAL, CHANNEL_KEY, EMOJI_KEY, EXPIRY_KEYS, GUILD_KEY, KEYS_SUFFIX,
-        MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
+        channel_key, emoji_key, guild_key, member_key, message_key, presence_key, role_key,
+        voice_key, BOT_USER_KEY, CACHE_JOB_INTERVAL, CHANNEL_KEY, EMOJI_KEY, EXPIRY_KEYS,
+        GUILD_KEY, KEYS_SUFFIX, MESSAGE_KEY, SESSIONS_KEY, STATUSES_KEY,
     },
     models::{ApiError, ApiResult, FormattedDateTime, GuildItem, SessionInfo, StatusInfo},
-    utils::{get_channel_key, get_keys, get_user_id, to_value},
+    utils::to_value,
 };
 
-use redis::{AsyncCommands, FromRedisValue, ToRedisArgs};
+use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, ToRedisArgs};
 use serde::{de::DeserializeOwned, Serialize};
 use simd_json::owned::Value;
 use std::{collections::HashMap, hash::Hash, iter, sync::Arc};
@@ -27,7 +26,7 @@ use twilight_model::{
     },
 };
 
-pub async fn get<K, T>(conn: &mut redis::aio::Connection, key: K) -> ApiResult<Option<T>>
+pub async fn get<K, T>(conn: &mut MultiplexedConnection, key: K) -> ApiResult<Option<T>>
 where
     K: ToRedisArgs + Send + Sync,
     T: DeserializeOwned,
@@ -40,7 +39,7 @@ where
 }
 
 pub async fn get_all<K, T>(
-    conn: &mut redis::aio::Connection,
+    conn: &mut MultiplexedConnection,
     keys: &[K],
 ) -> ApiResult<Vec<Option<T>>>
 where
@@ -64,7 +63,7 @@ where
         .collect()
 }
 
-pub async fn get_members<K, T>(conn: &mut redis::aio::Connection, key: K) -> ApiResult<Vec<T>>
+pub async fn get_members<K, T>(conn: &mut MultiplexedConnection, key: K) -> ApiResult<Vec<T>>
 where
     K: ToRedisArgs + Send + Sync,
     T: FromRedisValue,
@@ -74,7 +73,7 @@ where
     Ok(res)
 }
 
-pub async fn get_members_len<K>(conn: &mut redis::aio::Connection, key: K) -> ApiResult<u64>
+pub async fn get_members_len<K>(conn: &mut MultiplexedConnection, key: K) -> ApiResult<u64>
 where
     K: ToRedisArgs + Send + Sync,
 {
@@ -84,7 +83,7 @@ where
 }
 
 pub async fn get_hashmap<K, T, U>(
-    conn: &mut redis::aio::Connection,
+    conn: &mut MultiplexedConnection,
     key: K,
 ) -> ApiResult<HashMap<T, U>>
 where
@@ -97,7 +96,7 @@ where
     Ok(res)
 }
 
-pub async fn set<K, T>(conn: &mut redis::aio::Connection, key: K, value: T) -> ApiResult<()>
+pub async fn set<K, T>(conn: &mut MultiplexedConnection, key: K, value: T) -> ApiResult<()>
 where
     K: AsRef<str>,
     T: Serialize,
@@ -107,7 +106,7 @@ where
     Ok(())
 }
 
-pub async fn set_all<I, K, T>(conn: &mut redis::aio::Connection, keys: I) -> ApiResult<()>
+pub async fn set_all<I, K, T>(conn: &mut MultiplexedConnection, keys: I) -> ApiResult<()>
 where
     I: IntoIterator<Item = (K, T)>,
     K: AsRef<str>,
@@ -119,7 +118,7 @@ where
         .into_iter()
         .map(|(key, value)| {
             let key = key.as_ref();
-            let parts = get_keys(key);
+            let parts: Vec<&str> = key.split(':').collect();
 
             let new_key = if parts.len() > 2 && parts[0] == CHANNEL_KEY {
                 format!("{}:{}", parts[0], parts[2])
@@ -165,7 +164,7 @@ where
     Ok(())
 }
 
-pub async fn expire<K>(conn: &mut redis::aio::Connection, key: K, expiry: u64) -> ApiResult<()>
+pub async fn expire<K>(conn: &mut MultiplexedConnection, key: K, expiry: u64) -> ApiResult<()>
 where
     K: ToRedisArgs + Send + Sync,
 {
@@ -174,7 +173,7 @@ where
     Ok(())
 }
 
-pub async fn expire_all<I, K>(conn: &mut redis::aio::Connection, keys: I) -> ApiResult<()>
+pub async fn expire_all<I, K>(conn: &mut MultiplexedConnection, keys: I) -> ApiResult<()>
 where
     I: IntoIterator<Item = (K, u64)>,
     K: ToRedisArgs + Send + Sync,
@@ -199,7 +198,7 @@ where
     Ok(())
 }
 
-pub async fn del_all<I, K>(conn: &mut redis::aio::Connection, keys: I) -> ApiResult<()>
+pub async fn del_all<I, K>(conn: &mut MultiplexedConnection, keys: I) -> ApiResult<()>
 where
     I: IntoIterator<Item = K>,
     K: AsRef<str>,
@@ -210,7 +209,7 @@ where
         .into_iter()
         .map(|key| {
             let key = key.as_ref();
-            let parts = get_keys(key);
+            let parts: Vec<&str> = key.split(':').collect();
 
             let new_key = if parts.len() > 2 && parts[0] == CHANNEL_KEY {
                 format!("{}:{}", parts[0], parts[2])
@@ -256,14 +255,14 @@ where
     Ok(())
 }
 
-pub async fn del(conn: &mut redis::aio::Connection, key: impl AsRef<str>) -> ApiResult<()> {
+pub async fn del(conn: &mut MultiplexedConnection, key: impl AsRef<str>) -> ApiResult<()> {
     del_all(conn, iter::once(key)).await?;
 
     Ok(())
 }
 
 pub async fn del_hashmap<K>(
-    conn: &mut redis::aio::Connection,
+    conn: &mut MultiplexedConnection,
     key: K,
     keys: &[String],
 ) -> ApiResult<()>
@@ -279,7 +278,7 @@ where
     Ok(())
 }
 
-pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Arc<Cluster>]) {
+pub async fn run_jobs(mut conn: MultiplexedConnection, clusters: &[Arc<Cluster>]) {
     loop {
         let mut statuses = vec![];
         let mut sessions = HashMap::new();
@@ -288,16 +287,16 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Arc<Cluster
             let mut status: Vec<StatusInfo> = cluster
                 .info()
                 .into_iter()
-                .map(|(k, v)| StatusInfo {
-                    shard: k,
-                    status: format!("{}", v.stage()),
-                    latency: v
+                .map(|(key, value)| StatusInfo {
+                    shard: key,
+                    status: format!("{}", value.stage()),
+                    latency: value
                         .latency()
                         .recent()
                         .back()
                         .map(|value| value.as_millis() as u64)
                         .unwrap_or_default(),
-                    last_ack: v
+                    last_ack: value
                         .latency()
                         .received()
                         .map(|value| {
@@ -323,21 +322,15 @@ pub async fn run_jobs(conn: &mut redis::aio::Connection, clusters: &[Arc<Cluster
 
         statuses.sort_by(|a, b| a.shard.cmp(&b.shard));
 
-        if let Err(err) = set(conn, STATUSES_KEY, &statuses).await {
+        if let Err(err) = set(&mut conn, STATUSES_KEY, &statuses).await {
             warn!("Failed to dump gateway statuses: {:?}", err);
         }
 
-        if let Err(err) = set(conn, SESSIONS_KEY, &sessions).await {
+        if let Err(err) = set(&mut conn, SESSIONS_KEY, &sessions).await {
             warn!("Failed to dump gateway sessions: {:?}", err);
         }
 
-        sleep(Duration::from_millis(CACHE_DUMP_INTERVAL as u64)).await;
-    }
-}
-
-pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
-    loop {
-        let hashmap: ApiResult<HashMap<String, String>> = get_hashmap(conn, EXPIRY_KEYS).await;
+        let hashmap: ApiResult<HashMap<String, String>> = get_hashmap(&mut conn, EXPIRY_KEYS).await;
 
         match hashmap {
             Ok(hashmap) => {
@@ -356,9 +349,10 @@ pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
                     }
                 }
 
-                if let Err(err) = del_all(conn, keys.as_slice()).await {
+                if let Err(err) = del_all(&mut conn, keys.as_slice()).await {
                     warn!("Failed to delete expired keys: {:?}", err);
-                } else if let Err(err) = del_hashmap(conn, EXPIRY_KEYS, keys.as_slice()).await {
+                } else if let Err(err) = del_hashmap(&mut conn, EXPIRY_KEYS, keys.as_slice()).await
+                {
                     warn!("Failed to delete expired keys hashmap: {:?}", err);
                 }
             }
@@ -367,12 +361,12 @@ pub async fn run_cleanups(conn: &mut redis::aio::Connection) {
             }
         }
 
-        sleep(Duration::from_millis(CACHE_CLEANUP_INTERVAL as u64)).await;
+        sleep(Duration::from_millis(CACHE_JOB_INTERVAL as u64)).await;
     }
 }
 
 async fn clear_guild<T: DeserializeOwned>(
-    conn: &mut redis::aio::Connection,
+    conn: &mut MultiplexedConnection,
     guild_id: Id<GuildMarker>,
 ) -> ApiResult<Option<T>> {
     let members: ApiResult<Vec<String>> =
@@ -393,7 +387,7 @@ async fn clear_guild<T: DeserializeOwned>(
 }
 
 pub async fn update(
-    conn: &mut redis::aio::Connection,
+    conn: &mut MultiplexedConnection,
     event: &Event,
     bot_id: Id<UserMarker>,
 ) -> ApiResult<Option<Value>> {
@@ -401,21 +395,17 @@ pub async fn update(
 
     match event {
         Event::ChannelCreate(data) => {
-            set(conn, get_channel_key(data), &data).await?;
+            set(conn, channel_key(data.guild_id, data.id), &data).await?;
         }
         Event::ChannelDelete(data) => {
-            let key = get_channel_key(data);
+            let key = channel_key(data.guild_id, data.id);
             if CONFIG.state_old {
                 old = get(conn, &key).await?;
             }
             del(conn, &key).await?;
         }
         Event::ChannelPinsUpdate(data) => {
-            let key = if let Some(guild_id) = data.guild_id {
-                channel_key(guild_id, data.channel_id)
-            } else {
-                private_channel_key(data.channel_id)
-            };
+            let key = channel_key(data.guild_id, data.channel_id);
             let channel: Option<Channel> = get(conn, &key).await?;
             if let Some(mut channel) = channel {
                 channel.last_pin_timestamp = data.last_pin_timestamp;
@@ -423,7 +413,7 @@ pub async fn update(
             }
         }
         Event::ChannelUpdate(data) => {
-            let key = get_channel_key(data);
+            let key = channel_key(data.guild_id, data.id);
             if CONFIG.state_old {
                 old = get(conn, &key).await?;
             }
@@ -437,7 +427,7 @@ pub async fn update(
             for mut channel in guild.channels.drain(..) {
                 channel.guild_id = Some(data.id);
                 items.push((
-                    channel_key(data.id, channel.id),
+                    channel_key(Some(data.id), channel.id),
                     GuildItem::Channel(channel),
                 ));
             }
@@ -464,8 +454,10 @@ pub async fn update(
             }
             for presence in guild.presences.drain(..) {
                 if CONFIG.state_presence {
-                    let id = get_user_id(&presence.user);
-                    items.push((presence_key(data.id, id), GuildItem::Presence(presence)));
+                    items.push((
+                        presence_key(data.id, presence.user.id()),
+                        GuildItem::Presence(presence),
+                    ));
                 }
             }
             items.push((guild_key(data.id), GuildItem::Guild(guild)));
@@ -493,7 +485,7 @@ pub async fn update(
                 .await?;
                 let emoji_keys: Vec<String> = keys
                     .into_iter()
-                    .filter(|key| get_keys(key)[0] == EMOJI_KEY)
+                    .filter(|key| key.split(':').next().unwrap_or_default() == EMOJI_KEY)
                     .collect();
                 let emojis: Vec<Emoji> = get_all(conn, emoji_keys.as_slice())
                     .await?
@@ -664,7 +656,7 @@ pub async fn update(
         }
         Event::PresenceUpdate(data) => {
             if CONFIG.state_presence {
-                let key = presence_key(data.guild_id, get_user_id(&data.user));
+                let key = presence_key(data.guild_id, data.user.id());
                 if CONFIG.state_old {
                     old = get(conn, &key).await?;
                 }
