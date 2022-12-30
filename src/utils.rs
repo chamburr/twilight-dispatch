@@ -271,7 +271,7 @@ pub fn log_discord(color: usize, message: impl Into<String>) {
             .embeds(embeds);
 
         if let Ok(message) = message {
-            if let Err(err) = message.exec().await {
+            if let Err(err) = message.await {
                 warn!("Failed to post message to Discord: {:?}", err)
             }
         }
@@ -310,7 +310,7 @@ pub fn log_discord_guild(color: usize, title: impl Into<String>, message: impl I
             .embeds(embeds);
 
         if let Ok(message) = message {
-            if let Err(err) = message.exec().await {
+            if let Err(err) = message.await {
                 warn!("Failed to post message to Discord: {:?}", err)
             }
         }
