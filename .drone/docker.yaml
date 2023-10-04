@@ -18,4 +18,4 @@ trigger:
     - push
     - tag
   branch:
-    - master
+    - main

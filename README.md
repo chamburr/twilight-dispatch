@@ -150,4 +150,4 @@ Twilight: https://github.com/twilight-rs/twilight
 
 ## License
 
-This project is licensed under [ISC](LICENSE).
+This project is licensed under [ISC License](LICENSE).
