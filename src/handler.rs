@@ -35,10 +35,19 @@ pub async fn outgoing(
         let cluster_clone = cluster.clone();
         let channel_clone = channel.clone();
 
+        if CONFIG.state_enabled && event.kind() == EventType::Ready {
+            if let Err(err) = cache::update(&mut conn_clone, &event, bot_id).await {
+                warn!("[Shard {}] Failed to update state: {:?}", shard, err);
+            }
+        }
+
         tokio::spawn(async move {
             let mut old = None;
 
-            if CONFIG.state_enabled && event.kind() != EventType::ShardPayload {
+            if CONFIG.state_enabled
+                && event.kind() != EventType::ShardPayload
+                && event.kind() != EventType::Ready
+            {
                 match cache::update(&mut conn_clone, &event, bot_id).await {
                     Ok(value) => {
                         old = value;
