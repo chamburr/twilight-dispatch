@@ -13,7 +13,7 @@ separate from your application layer, bringing many benefits such as the followi
    load balancing between your service workers.
 
 If you encounter any issues while running the service, please feel free create an issue here, or you
-can contact CHamburr#2591 on Discord. We will try our best to help you.
+can contact chamburr on Discord. We will try our best to help you.
 
 ## Features
 
